@@ -1,4 +1,5 @@
 import * as ort from "onnxruntime-web/all";
+import { getModel, letterboxImage, restoreBoundingBox } from "./utils";
 
 const DETECTION_MODEL_REPO = import.meta.env.WXT_DETECTION_MODEL_REPO;
 const DETECTION_MODEL_PATH = import.meta.env.WXT_DETECTION_MODEL_PATH;
@@ -8,41 +9,12 @@ ort.env.wasm.wasmPaths = browser.runtime.getURL("/");
 let session: ort.InferenceSession | null = null;
 let isDetecting = false;
 
-async function getModel(repoID: string, modelPath: string) {
-  const url = `https://huggingface.co/${repoID}/resolve/main/${modelPath}`;
-  const cache = await caches.open(repoID);
-  const storageKey: `local:${string}` = `local:${repoID}`;
-
-  let response = await cache.match(url);
-  let needsUpdate = false;
-
-  try {
-    const headResponse = await fetch(url, { method: "HEAD" });
-    const currentHash = headResponse.headers.get("x-repo-commit");
-    const localHash = await storage.getItem(storageKey);
-
-    if (currentHash !== localHash) {
-      needsUpdate = true;
-      await storage.setItem(storageKey, currentHash);
-    }
-  } catch (error) {
-    console.warn("Offline: skipping model update check and using cache.");
-  }
-
-  if (!response || needsUpdate) {
-    response = await fetch(url);
-    await cache.put(url, response.clone());
-  }
-
-  return ort.InferenceSession.create(await response.arrayBuffer(), {
-    executionProviders: ["webnn", "webgpu", "wasm"],
-  });
-}
-
 export async function detectTextBubble(
-  imageData: ImageData,
+  base64Img: string,
   minConfidence: number = 0.5,
 ) {
+  const {imageData, origWidth, origHeight} = await letterboxImage(base64Img);
+
   if (!session)
     session = await getModel(DETECTION_MODEL_REPO, DETECTION_MODEL_PATH);
 
@@ -92,7 +64,11 @@ export async function detectTextBubble(
       if (Number.isNaN(confidence) || confidence < minConfidence) {
         continue;
       }
-      formattedDetections.push({ x1, y1, x2, y2, confidence, classId });
+      formattedDetections.push(
+        restoreBoundingBox({
+          x1, y1, x2, y2, confidence, classId
+        }, origWidth, origHeight, targetSize),
+      );
     }
 
     return formattedDetections;

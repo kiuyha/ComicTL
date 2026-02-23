@@ -6,7 +6,8 @@ export default defineConfig({
   vite: () => ({
     plugins: [tailwindcss()],
     build: {
-      minify: "terser",
+      // minify: "terser",
+      minify: import.meta.env.PROD ? "terser" : "esbuild",
     },
   }),
 
@@ -23,7 +24,12 @@ export default defineConfig({
     host_permissions: ["<all_urls>"],
     web_accessible_resources: [
       {
-        resources: ["/offscreen.html", "/content-scripts/*"],
+        resources: [
+          "/offscreen.html",
+          "/content-scripts/*",
+          "/*.wasm",
+          "/*.mjs",
+        ],
         matches: ["<all_urls>"],
       },
     ],

@@ -12,7 +12,7 @@ export default defineContentScript({
     let currentUi: ShadowRootContentScriptUi<any> | null = null;
     let currentApp: ReturnType<typeof mount> | null = null;
 
-    browser.runtime.onMessage.addListener(async (msg) => {
+    browser.runtime.onMessage.addListener((msg) => {
       if (msg.type === "comictl-translate-image") {
         if (currentUi) {
           currentUi.remove();
@@ -26,6 +26,8 @@ export default defineContentScript({
         if (!imgElement) return;
 
         const rect = imgElement.getBoundingClientRect();
+        const scaleX = rect.width / imgElement.naturalWidth;
+        const scaleY = rect.height / imgElement.naturalHeight;
 
         // Wrap image inside new parent to ensure cross-web compatibility
         const wrapper = document.createElement("div");
@@ -39,7 +41,7 @@ export default defineContentScript({
 
         const base64Img = getBase64Image(imgElement);
 
-        currentUi = await createShadowRootUi(ctx, {
+        createShadowRootUi(ctx, {
           name: "comictl-overlay",
           position: "inline",
           anchor: wrapper,
@@ -50,6 +52,8 @@ export default defineContentScript({
               target: uiContainer,
               props: {
                 targetImageRect: rect,
+                scaleX,
+                scaleY,
 
                 // Sent img to detection model after init and return bounding boxes
                 requestBubbleDetection: () =>
@@ -82,10 +86,14 @@ export default defineContentScript({
             if (app) {
               unmount(app);
             }
+            if (imgElement.parentElement === wrapper) {
+              wrapper.replaceWith(imgElement);
+            }
           },
+        }).then((ui) => {
+          currentUi = ui;
+          currentUi.mount();
         });
-
-        currentUi.mount();
       }
     });
   },

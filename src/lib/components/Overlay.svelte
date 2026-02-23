@@ -10,6 +10,8 @@
 
   interface Props {
     targetImageRect: DOMRect;
+    scaleX: number;
+    scaleY: number;
     requestBubbleDetection: () => Promise<Bbox[]>;
     requestTextTranslation: (bboxes: Bbox[]) => Promise<string>;
     onClose: () => void;
@@ -17,6 +19,8 @@
 
   let {
     targetImageRect,
+    scaleX,
+    scaleY,
     requestBubbleDetection,
     requestTextTranslation,
     onClose,
@@ -26,7 +30,13 @@
   let bboxes = $state<Bbox[]>([]);
   let imageUrl = $state("");
   let activeIndex = $state<number | null>(null);
-  let dragInfo = $state<{ index: number; handle: string } | null>(null);
+  let dragInfo = $state<{
+    index: number;
+    handle: string;
+    startX: number;
+    startY: number;
+    initialBox: Bbox;
+  } | null>(null);
 
   async function handleConfirm() {
     if (mode !== "refining") return;
@@ -60,31 +70,37 @@
       e.stopPropagation();
       e.preventDefault();
 
-      dragInfo = { index, handle };
+      dragInfo = {
+        index,
+        handle,
+        startX: e.clientX,
+        startY: e.clientY,
+        initialBox: { ...bboxes[index] },
+      };
     };
   }
 
   onMount(async () => {
     bboxes = await requestBubbleDetection();
-    console.log(bboxes)
     mode = "refining";
   });
 
   $effect(() => {
     const handleClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
+      const path = event.composedPath() as HTMLElement[];
 
-      // Okay if they click on the overlay
-      if (target.closest("#comic-tl-overlay")) {
+      if (
+        path.some(
+          (el) =>
+            el.classList?.contains("comictl-box") ||
+            el.classList?.contains("handle"),
+        )
+      )
         return;
-      }
 
-      // If they click outside the active box and not a box handle
-      if (activeIndex !== null && !target.closest(".handle")) {
-        activeIndex = null;
-      }
+      if (path.some((el) => el.querySelector("comictl-overlay"))) return;
 
-      // If they click the manga page or background, block the event
+      activeIndex = null;
       event.stopPropagation();
       event.preventDefault();
     };
@@ -95,25 +111,39 @@
         activeIndex = null;
       }
       // Delete active box if user hits Delete or Backspace
-      if ((e.key === "Delete" || e.key === "Backspace") && activeIndex !== null) {
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        activeIndex !== null
+      ) {
         deleteActiveBox();
       }
     };
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!dragInfo) return;
+      requestAnimationFrame(() => {
+        if (!dragInfo) return;
+        const { index, handle, startX, startY, initialBox } = dragInfo;
 
-      const { index, handle } = dragInfo;
-      const box = bboxes[index];
+        // Calculate how much the mouse has moved in "natural" pixels
+        const dx = (e.clientX - startX) / scaleX;
+        const dy = (e.clientY - startY) / scaleY;
 
-      // Update coordinates based on which handle is active
-      if (handle.includes("t")) box.y1 = e.clientY;
-      if (handle.includes("b")) box.y2 = e.clientY;
-      if (handle.includes("l")) box.x1 = e.clientX;
-      if (handle.includes("r")) box.x2 = e.clientX;
-
-      if (box.x1 > box.x2) [box.x1, box.x2] = [box.x2, box.x1];
-      if (box.y1 > box.y2) [box.y1, box.y2] = [box.y2, box.y1];
+        // Handle Moving the whole box
+        if (handle === "move") {
+          const w = initialBox.x2 - initialBox.x1;
+          const h = initialBox.y2 - initialBox.y1;
+          bboxes[index].x1 = initialBox.x1 + dx;
+          bboxes[index].y1 = initialBox.y1 + dy;
+          bboxes[index].x2 = bboxes[index].x1 + w;
+          bboxes[index].y2 = bboxes[index].y1 + h;
+        } else {
+          // Handle Resizing
+          if (handle.includes("t")) bboxes[index].y1 = initialBox.y1 + dy;
+          if (handle.includes("b")) bboxes[index].y2 = initialBox.y2 + dy;
+          if (handle.includes("l")) bboxes[index].x1 = initialBox.x1 + dx;
+          if (handle.includes("r")) bboxes[index].x2 = initialBox.x2 + dx;
+        }
+      });
     };
 
     const handleMouseUp = () => {
@@ -132,20 +162,46 @@
       window.addEventListener("mouseup", handleMouseUp);
     }
     window.addEventListener("click", handleClick, { capture: true });
-    window.addEventListener("keydown",handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("click", handleClick, { capture: true });
-      window.removeEventListener("keydown",handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
   });
+
+  const maskPath = $derived.by(() => {
+    if (!bboxes.length || !targetImageRect) return "none";
+
+    const width = targetImageRect.width;
+    const height = targetImageRect.height;
+
+    // Start with a path that covers the entire image (clockwise)
+    let pathString = `M 0 0 h ${width} v ${height} h -${width} z `;
+
+    // Add each box as a sub-path (counter-clockwise or same direction with evenodd)
+    const boxPaths = bboxes
+      .map((box) => {
+        const x = box.x1 * scaleX;
+        const y = box.y1 * scaleY;
+        const w = (box.x2 - box.x1) * scaleX;
+        const h = (box.y2 - box.y1) * scaleY;
+        return `M ${x} ${y} h ${w} v ${h} h -${w} z`;
+      })
+      .join(" ");
+
+    return `path(evenodd, "${pathString} ${boxPaths}")`;
+  });
 </script>
 
 <div
+  role="presentation"
   class="absolute top-0 left-0 overflow-hidden pointer-events-auto group z-50 w-full h-full"
+  onclick={(e) => e.stopPropagation()}
 >
   {#if mode === "loading"}
+    <div class="absolute inset-0 bg-black/50 transition-all duration-300"></div>
     <div
       class="absolute inset-0 flex items-center justify-center z-70 backdrop-blur-[1px]"
     >
@@ -154,12 +210,6 @@
   {/if}
 
   {#if mode === "refining"}
-    <div
-      class="absolute inset-0 {!bboxes.length
-        ? 'bg-black/50'
-        : ''}"
-    ></div>
-
     <div
       class="toolbar absolute top-4 left-1/2 -translate-x-1/2 bg-white shadow-lg rounded-lg p-2 flex gap-2 z-60 border border-gray-200 {dragInfo
         ? 'opacity-30 pointer-events-none'
@@ -205,21 +255,33 @@
       </button>
     </div>
 
+    {#if bboxes.length > 0}
+      <div
+        class="absolute inset-0 bg-black/50 pointer-events-none"
+        style="
+          clip-path: {maskPath};
+          transition: none;
+          will-change: clip-path;
+        "
+      ></div>
+    {/if}
+
     {#each bboxes as box, i}
       {@const isActive = activeIndex === i}
 
       <div
         role="presentation"
-        class="absolute border-2 transition-all p-0 m-0 bg-transparent {isActive
+        class="comictl-box absolute border-2 p-0 m-0 bg-transparent {isActive
           ? 'border-blue-500 z-50 ring-2 ring-blue-300'
           : 'border-red-500 z-40'}"
-        style:left="{box.x1}px"
-        style:top="{box.y1}px"
-        style:width="{box.x2 - box.x1}px"
-        style:height="{box.y2 - box.y1}px"
+        style:left="{box.x1 * scaleX}px"
+        style:top="{box.y1 * scaleY}px"
+        style:width="{(box.x2 - box.x1) * scaleX}px"
+        style:height="{(box.y2 - box.y1) * scaleY}px"
         onmousedown={(e) => {
           e.stopPropagation();
           activeIndex = i;
+          handleDragStart(i, "move")(e);
         }}
       >
         {#if isActive}
