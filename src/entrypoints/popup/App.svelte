@@ -1,42 +1,43 @@
 <script lang="ts">
-  import svelteLogo from '../../assets/svelte.svg'
-  import Counter from '../../lib/Counter.svelte'
+  import { onMount } from 'svelte';
+
+  let apiKey = '';
+  let status = '';
+
+  // Load saved key on startup
+  onMount(async () => {
+    apiKey = await storage.getItem('local:geminiApiKey') || '';
+  });
+
+  async function saveKey() {
+    await storage.setItem('local:geminiApiKey', apiKey);
+    status = 'Saved!';
+    console.log('Saved!');
+    setTimeout(() => status = '', 2000);
+  }
 </script>
 
-<main>
-  <div>
-    <a href="https://wxt.dev" target="_blank" rel="noreferrer">
-      <img src="/wxt.svg" class="logo" alt="WXT Logo" />
-    </a>
-    <a href="https://svelte.dev" target="_blank" rel="noreferrer">
-      <img src={svelteLogo} class="logo svelte" alt="Svelte Logo" />
-    </a>
-  </div>
-  <h1>ComicTL</h1>
-
-  <div class="card">
-    <Counter />
+<main class="p-4 w-64">
+  <h1 class="text-lg font-bold mb-4">ComicTL Settings</h1>
+  
+  <div class="mb-4">
+    <label class="block text-sm font-medium mb-1">Gemini API Key</label>
+    <input 
+      type="password" 
+      bind:value={apiKey} 
+      class="w-full p-2 border rounded"
+      placeholder="AIzaSy..."
+    />
   </div>
 
-  <p class="read-the-docs">
-    Nice to meet you
-  </p>
+  <button 
+    on:click={saveKey}
+    class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700"
+  >
+    Save Configuration
+  </button>
+  
+  {#if status}
+    <p class="text-green-600 text-sm mt-2 text-center">{status}</p>
+  {/if}
 </main>
-
-<style>
-  .logo {
-    height: 6em;
-    padding: 1.5em;
-    will-change: filter;
-    transition: filter 300ms;
-  }
-  .logo:hover {
-    filter: drop-shadow(0 0 2em #54bc4ae0);
-  }
-  .logo.svelte:hover {
-    filter: drop-shadow(0 0 2em #ff3e00aa);
-  }
-  .read-the-docs {
-    color: #888;
-  }
-</style>
