@@ -5,7 +5,8 @@
     X,
     Trash2,
     Box,
-    CirclePlus,
+    Undo,
+    Redo,
   } from "lucide-svelte";
 
   interface Props {
@@ -37,6 +38,31 @@
     startY: number;
     initialBox: Bbox;
   } | null>(null);
+  let history = $state<Bbox[][]>([]);
+  let historyIndex = $state(-1);
+
+  function saveHistory() {
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push($state.snapshot(bboxes));
+    history = newHistory;
+    historyIndex = history.length - 1;
+  }
+
+  function undo() {
+    if (historyIndex > 0) {
+      historyIndex--;
+      bboxes = $state.snapshot(history[historyIndex]);
+      activeIndex = null;
+    }
+  }
+
+  function redo() {
+    if (historyIndex < history.length - 1) {
+      historyIndex++;
+      bboxes = $state.snapshot(history[historyIndex]);
+      activeIndex = null;
+    }
+  }
 
   async function handleConfirm() {
     if (mode !== "refining") return;
@@ -48,6 +74,7 @@
   function deleteActiveBox() {
     if (activeIndex !== null) {
       bboxes = bboxes.filter((_, i) => i !== activeIndex);
+      saveHistory();
       activeIndex = null;
     }
   }
@@ -63,6 +90,7 @@
       },
     ];
     activeIndex = bboxes.length - 1;
+    saveHistory();
   }
 
   function handleDragStart(index: number, handle: string) {
@@ -79,9 +107,10 @@
       };
     };
   }
-
+  
   onMount(async () => {
     bboxes = await requestBubbleDetection();
+    saveHistory();
     mode = "refining";
   });
 
@@ -106,6 +135,8 @@
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      e.preventDefault();
+
       // If user hits Escape, deselect the active box
       if (e.key === "Escape") {
         activeIndex = null;
@@ -117,6 +148,17 @@
       ) {
         deleteActiveBox();
       }
+
+      
+      // Undo if user click ctrl + z
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        // redo if the shift key being push
+        if (e.shiftKey) redo();
+        else undo();
+      }
+
+      // Undo if user click ctrl + y
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") redo();
     };
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -153,6 +195,8 @@
         // Normalize coordinates so x1/y1 is always the top-left
         if (box.x1 > box.x2) [box.x1, box.x2] = [box.x2, box.x1];
         if (box.y1 > box.y2) [box.y1, box.y2] = [box.y2, box.y1];
+
+        saveHistory();
       }
       dragInfo = null;
     };
@@ -211,48 +255,69 @@
 
   {#if mode === "refining"}
     <div
-      class="toolbar absolute top-4 left-1/2 -translate-x-1/2 bg-white shadow-lg rounded-lg p-2 flex gap-2 z-60 border border-gray-200 {dragInfo
+      class="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-60 {dragInfo
         ? 'opacity-30 pointer-events-none'
         : ''}"
       onmousedown={(e) => e.stopPropagation()}
       role="presentation"
     >
-      <button
-        onclick={onClose}
-        class="absolute -top-2 -right-2 cursor-pointer bg-gray-200 rounded-full p-1 hover:bg-gray-300 transition-colors"
+      <div
+        class="relative bg-white shadow-lg rounded-lg p-2 flex gap-2 border border-gray-200"
       >
-        <X size={18} />
-      </button>
+        <button
+          onclick={onClose}
+          class="absolute -top-2 -right-2 cursor-pointer bg-gray-200 rounded-full p-1 hover:bg-gray-300 transition-colors"
+        >
+          <X size={18} />
+        </button>
 
-      <button
-        onclick={addBox}
-        class="cursor-pointer flex flex-col items-center justify-center px-3 py-1 rounded text-sm font-medium transition-colors hover:bg-gray-100 text-gray-700 border border-gray-200"
-      >
-        <!-- <div class=""> -->
-        <Box size={18} />
-        <!-- <CirclePlus size={5} /> -->
-        <!-- </div> -->
-        <span>Add Box</span>
-      </button>
+        <button
+          onclick={addBox}
+          class="cursor-pointer flex flex-col items-center justify-center px-3 py-1 rounded text-sm font-medium transition-colors hover:bg-gray-100 text-gray-700 border border-gray-200"
+        >
+          <Box size={18} />
+          <span>Add Box</span>
+        </button>
 
-      <button
-        onclick={deleteActiveBox}
-        class="cursor-pointer flex flex-col items-center justify-center px-3 py-1 rounded text-sm font-medium transition-colors
-        {activeIndex === null
-          ? 'hover:bg-gray-100 text-gray-700 border border-gray-200'
-          : 'border border-blue-200 bg-blue-100 text-blue-700'}"
-      >
-        <Trash2 size={18} />
-        <span>Delete Box</span>
-      </button>
+        <button
+          onclick={deleteActiveBox}
+          class="cursor-pointer flex flex-col items-center justify-center px-3 py-1 rounded text-sm font-medium transition-colors
+      {activeIndex === null
+            ? 'hover:bg-gray-100 text-gray-700 border border-gray-200'
+            : 'border border-blue-200 bg-blue-100 text-blue-700'}"
+        >
+          <Trash2 size={18} />
+          <span>Delete Box</span>
+        </button>
 
-      <button
-        onclick={handleConfirm}
-        class="cursor-pointer flex flex-col items-center px-3 py-1 rounded text-sm font-medium transition-colorshover:bg-green-100 text-green-700 border border-green-200"
-      >
-        <Check size={18} />
-        <span>Confirm</span>
-      </button>
+        <button
+          onclick={handleConfirm}
+          class="cursor-pointer flex flex-col items-center px-3 py-1 rounded text-sm font-medium transition-colors hover:bg-green-100 text-green-700 border border-green-200"
+        >
+          <Check size={18} />
+          <span>Confirm</span>
+        </button>
+      </div>
+
+      <div class="flex gap-2">
+        <button
+          onclick={undo}
+          disabled={historyIndex <= 0}
+          title="Undo"
+          class="cursor-pointer p-1.5 bg-white shadow-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          <Undo size={16} />
+        </button>
+
+        <button
+          onclick={redo}
+          disabled={historyIndex >= history.length - 1}
+          title="Redo"
+          class="cursor-pointer p-1.5 bg-white shadow-sm rounded-md border border-gray-200 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          <Redo size={16} />
+        </button>
+      </div>
     </div>
 
     {#if bboxes.length > 0}
