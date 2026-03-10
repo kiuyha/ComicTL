@@ -19,6 +19,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      
+      - name: Install dependecies
+        run: |
+          bun install
+          cp node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.{wasm,mjs,jsep.wasm,jsep.mjs} public
 
       - name: Build and Zip Extension
         run: |
