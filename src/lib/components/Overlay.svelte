@@ -7,6 +7,8 @@
     Box,
     Undo,
     Redo,
+    ArrowUpNarrowWide,
+    ArrowDownUp,
   } from "lucide-svelte";
 
   interface Props {
@@ -18,6 +20,8 @@
     onClose: () => void;
   }
 
+  const PADDING_PX = 10;
+
   let {
     targetImageRect,
     scaleX,
@@ -26,9 +30,11 @@
     requestTextTranslation,
     onClose,
   }: Props = $props();
-  let mode = $state<"loading" | "refining" | "results">("loading");
 
+  let toolbarPosition = $state<"top" | "bottom">("top");
+  let mode = $state<"loading" | "refining" | "results">("loading");
   let bboxes = $state<Bbox[]>([]);
+  let isManuallySorted = $state(false);
   let imageUrl = $state("");
   let activeIndex = $state<number | null>(null);
   let dragInfo = $state<{
@@ -40,6 +46,41 @@
   } | null>(null);
   let history = $state<Bbox[][]>([]);
   let historyIndex = $state(-1);
+
+  function applyBboxesSort() {
+    let totalHeight = 0;
+
+    bboxes.forEach((box) => {
+      totalHeight += box.y2 - box.y1;
+    });
+
+    const avgHeight = bboxes.length > 0 ? totalHeight / bboxes.length : 100;
+    // 75% of an average bubble is a very safe threshold for the same panel row
+    const yTolerance = avgHeight * 0.75;
+
+    const originalBboxes = bboxes.slice();
+    bboxes.sort((a, b) => {
+      // Compare the center points instead of the top edges
+      const aCenterY = (a.y1 + a.y2) / 2;
+      const bCenterY = (b.y1 + b.y2) / 2;
+      const yDiff = aCenterY - bCenterY;
+
+      // If they are on roughly the same horizontal line
+      if (Math.abs(yDiff) < yTolerance) {
+        // Sort Right-to-Left using center X
+        const aCenterX = (a.x1 + a.x2) / 2;
+        const bCenterX = (b.x1 + b.x2) / 2;
+        return bCenterX - aCenterX;
+      }
+
+      // Otherwise, sort Top-to-Bottom
+      return yDiff;
+    });
+
+    if (!originalBboxes.every((box, i) => box.x1 === bboxes[i].x1))
+      saveHistory();
+    activeIndex = null;
+  }
 
   function saveHistory() {
     const newHistory = history.slice(0, historyIndex + 1);
@@ -89,8 +130,12 @@
         y2: Math.random() * targetImageRect.height + targetImageRect.top,
       },
     ];
+    if (!isManuallySorted) {
+      applyBboxesSort();
+    } else {
+      saveHistory();
+    }
     activeIndex = bboxes.length - 1;
-    saveHistory();
   }
 
   function handleDragStart(index: number, handle: string) {
@@ -107,10 +152,18 @@
       };
     };
   }
-  
+
   onMount(async () => {
-    bboxes = await requestBubbleDetection();
-    saveHistory();
+    const rawBboxes = await requestBubbleDetection();
+
+    bboxes = rawBboxes.map((box) => ({
+      x1: Math.max(0, box.x1 - PADDING_PX),
+      y1: Math.max(0, box.y1 - PADDING_PX),
+      x2: box.x2 + PADDING_PX,
+      y2: box.y2 + PADDING_PX,
+    }));
+
+    applyBboxesSort();
     mode = "refining";
   });
 
@@ -122,12 +175,11 @@
         path.some(
           (el) =>
             el.classList?.contains("comictl-box") ||
-            el.classList?.contains("handle"),
+            el.classList?.contains("handle") ||
+            el.id === "comictl-overlay",
         )
       )
         return;
-
-      if (path.some((el) => el.querySelector("comictl-overlay"))) return;
 
       activeIndex = null;
       event.stopPropagation();
@@ -149,7 +201,6 @@
         deleteActiveBox();
       }
 
-      
       // Undo if user click ctrl + z
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         // redo if the shift key being push
@@ -191,12 +242,28 @@
     const handleMouseUp = () => {
       if (dragInfo) {
         const box = bboxes[dragInfo.index];
+        const initialBox = dragInfo.initialBox;
 
         // Normalize coordinates so x1/y1 is always the top-left
         if (box.x1 > box.x2) [box.x1, box.x2] = [box.x2, box.x1];
         if (box.y1 > box.y2) [box.y1, box.y2] = [box.y2, box.y1];
 
-        saveHistory();
+        // Calculate how far the box actually changed to ignore accidental micro-drags
+        const dx1 = Math.abs(box.x1 - initialBox.x1);
+        const dy1 = Math.abs(box.y1 - initialBox.y1);
+        const dx2 = Math.abs(box.x2 - initialBox.x2);
+        const dy2 = Math.abs(box.y2 - initialBox.y2);
+        const moveThreshold = 2;
+
+        if (
+          dx1 > moveThreshold ||
+          dy1 > moveThreshold ||
+          dx2 > moveThreshold ||
+          dy2 > moveThreshold
+        ) {
+          isManuallySorted = true;
+          saveHistory();
+        }
       }
       dragInfo = null;
     };
@@ -207,6 +274,7 @@
     }
     window.addEventListener("click", handleClick, { capture: true });
     window.addEventListener("keydown", handleKeyDown);
+
     return () => {
       window.removeEventListener("click", handleClick, { capture: true });
       window.removeEventListener("keydown", handleKeyDown);
@@ -240,6 +308,7 @@
 </script>
 
 <div
+  id="comictl-overlay"
   role="presentation"
   class="absolute top-0 left-0 overflow-hidden pointer-events-auto group z-50 w-full h-full"
   onclick={(e) => e.stopPropagation()}
@@ -255,9 +324,11 @@
 
   {#if mode === "refining"}
     <div
-      class="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-60 {dragInfo
-        ? 'opacity-30 pointer-events-none'
-        : ''}"
+      class="absolute left-1/2 -translate-x-1/2 flex items-center gap-2 z-60 transition-all duration-300
+    {toolbarPosition === 'top'
+        ? 'top-4 flex-col'
+        : 'bottom-4 flex-col-reverse'} 
+    {dragInfo ? 'opacity-30 pointer-events-none' : ''}"
       onmousedown={(e) => e.stopPropagation()}
       role="presentation"
     >
@@ -269,6 +340,14 @@
           class="absolute -top-2 -right-2 cursor-pointer bg-gray-200 rounded-full p-1 hover:bg-gray-300 transition-colors"
         >
           <X size={18} />
+        </button>
+
+        <button
+          onclick={() =>
+            (toolbarPosition = toolbarPosition === "top" ? "bottom" : "top")}
+          class="absolute -top-2 -left-2 cursor-pointer bg-gray-200 rounded-full p-1 hover:bg-gray-300 transition-colors"
+        >
+          <ArrowDownUp size={18} />
         </button>
 
         <button
@@ -288,6 +367,16 @@
         >
           <Trash2 size={18} />
           <span>Delete Box</span>
+        </button>
+
+        <button
+          onclick={() => {
+            applyBboxesSort();
+          }}
+          class="cursor-pointer flex flex-col items-center px-3 py-1 rounded text-sm font-medium transition-colors hover:bg-purple-100 text-purple-700 border border-purple-200"
+        >
+          <ArrowUpNarrowWide size={18} />
+          <span>Auto Sort</span>
         </button>
 
         <button
@@ -349,6 +438,12 @@
           handleDragStart(i, "move")(e);
         }}
       >
+        <div
+          class="absolute -top-5.5 -left-0.5 bg-red-500 text-white font-bold text-sm px-1.5 py-0.5 min-w-6 text-center rounded-t-sm pointer-events-none"
+        >
+          {i + 1}
+        </div>
+
         {#if isActive}
           <button
             type="button"

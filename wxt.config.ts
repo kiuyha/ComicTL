@@ -6,7 +6,6 @@ export default defineConfig({
   vite: () => ({
     plugins: [tailwindcss()],
     build: {
-      // minify: "terser",
       minify: import.meta.env.PROD ? "terser" : "esbuild",
     },
   }),
@@ -28,7 +27,7 @@ export default defineConfig({
           "/offscreen.html",
           "/content-scripts/*",
           "/*.wasm",
-          "/*.mjs",
+          "/*.s",
         ],
         matches: ["<all_urls>"],
       },
@@ -45,5 +44,10 @@ export default defineConfig({
     binaries: {
       firefox: "/usr/bin/firefox",
     },
+    chromiumArgs: [
+      '--enable-unsafe-webgpu',
+      '--enable-features=Vulkan',
+      '--user-data-dir=./.wxt/chrome-data'
+    ]
   },
 });

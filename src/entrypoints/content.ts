@@ -67,7 +67,7 @@ export default defineContentScript({
                   browser.runtime.sendMessage({
                     type: "TRANSLATE_IMAGE",
                     data: {
-                      src: base64Img,
+                      base64Img,
                       bboxes,
                     },
                   }),

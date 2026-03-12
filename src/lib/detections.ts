@@ -1,22 +1,37 @@
 import * as ort from "onnxruntime-web/all";
-import { getModel, letterboxImage, restoreBoundingBox } from "./utils";
-
-const DETECTION_MODEL_REPO = import.meta.env.WXT_DETECTION_MODEL_REPO;
-const DETECTION_MODEL_PATH = import.meta.env.WXT_DETECTION_MODEL_PATH;
+import { getModel, scalingImage, restoreBoundingBox } from "./utils";
 
 ort.env.wasm.wasmPaths = browser.runtime.getURL("/");
 
 let session: ort.InferenceSession | null = null;
+let currentModelName: string | null = null;
 let isDetecting = false;
 
 export async function detectTextBubble(
   base64Img: string,
   minConfidence: number = 0.5,
+  requestedModel: string = "yolo26n",
+  autoUpdateModel: boolean = true
 ) {
-  const {imageData, origWidth, origHeight} = await letterboxImage(base64Img);
+  if (session && currentModelName !== requestedModel) {
+    try {
+      // Free the hardware memory allocated by the previous model
+      await session.release();
+    } catch (error) {
+      console.warn("Failed to cleanly release the previous session:", error);
+    }
+    session = null;
+  }
 
-  if (!session)
-    session = await getModel(DETECTION_MODEL_REPO, DETECTION_MODEL_PATH);
+  const DETECTION_MODEL_REPO = import.meta.env.WXT_DETECTION_MODEL_REPO;
+  const DETECTION_MODEL_PATH = `onnx/${requestedModel}.onnx`;
+
+  const { imageData, origWidth, origHeight } = await scalingImage(base64Img);
+
+  if (!session) {
+    session = await getModel(DETECTION_MODEL_REPO, DETECTION_MODEL_PATH, autoUpdateModel);
+    currentModelName = requestedModel;
+  }
 
   if (isDetecting) {
     throw new Error("Model is currently busy processing another image.");
@@ -65,9 +80,19 @@ export async function detectTextBubble(
         continue;
       }
       formattedDetections.push(
-        restoreBoundingBox({
-          x1, y1, x2, y2, confidence, classId
-        }, origWidth, origHeight, targetSize),
+        restoreBoundingBox(
+          {
+            x1,
+            y1,
+            x2,
+            y2,
+            confidence,
+            classId,
+          },
+          origWidth,
+          origHeight,
+          targetSize,
+        ),
       );
     }
 
