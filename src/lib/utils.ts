@@ -1,5 +1,12 @@
 import * as ort from "onnxruntime-web/all";
 
+const BUNDLED_FONT_STACKS: Record<string, string> = {
+  system:  "'Segoe UI', sans-serif",
+  noto:    "'Noto Sans', sans-serif",
+  bangers: "'Bangers', cursive",
+  comic:   "'Comic Neue', cursive",
+};
+
 async function fetchAsBase64(url: string) {
   const res = await fetch(url);
   const blob = await res.blob();
@@ -149,8 +156,8 @@ export async function drawNumberedBboxes(
         const fontSize = Math.max(14, Math.floor(28 * scale));
         ctx.font = `bold ${fontSize}px sans-serif`;
         const textMetrics = ctx.measureText(boxNumber);
-        
-        const labelWidth = textMetrics.width + (12 * scale);
+
+        const labelWidth = textMetrics.width + 12 * scale;
         const labelHeight = Math.max(18, 36 * scale);
 
         let labelY = y1 - labelHeight;
@@ -163,7 +170,7 @@ export async function drawNumberedBboxes(
 
         ctx.fillStyle = "#ffffff";
         ctx.textBaseline = "top";
-        ctx.fillText(boxNumber, x1 + (6 * scale), labelY + (4 * scale));
+        ctx.fillText(boxNumber, x1 + 6 * scale, labelY + 4 * scale);
       });
 
       // Export at 75% quality
@@ -280,52 +287,75 @@ function inpaintBbox(imgData: ImageData, bbox: Bbox, margin = 4) {
   }
 }
 
-/**
- * Word-wraps text to fit maxWidth, returns lines.
- */
 function wrapText(
   ctx: CanvasRenderingContext2D,
   text: string,
   maxW: number,
 ): string[] {
   const lines: string[] = [];
-  // Handle explicit newlines too
+
   for (const paragraph of text.split("\n")) {
     const words = paragraph.split(" ");
     let line = "";
+
     for (const word of words) {
       const candidate = line ? `${line} ${word}` : word;
+
       if (ctx.measureText(candidate).width <= maxW) {
         line = candidate;
       } else {
-        if (line) lines.push(line);
-        line = word;
+        // Word doesn't fit — try hyphenating it
+        if (ctx.measureText(word).width > maxW) {
+          // Push whatever line we had first
+          if (line) { lines.push(line); line = ""; }
+
+          // Split the long word with hyphens
+          let chunk = "";
+          for (const char of word) {
+            const trial = chunk + char + "-";
+            if (ctx.measureText(trial).width > maxW && chunk) {
+              lines.push(chunk + "-");
+              chunk = char;
+            } else {
+              chunk += char;
+            }
+          }
+          // chunk remainder becomes the start of the next line
+          line = chunk;
+        } else {
+          if (line) lines.push(line);
+          line = word;
+        }
       }
     }
+
     if (line) lines.push(line);
   }
+
   return lines;
 }
 
 /**
  * Shrinks font until the wrapped text fits inside the bbox, then draws it centered.
  */
+
 function drawFittedText(
   ctx: CanvasRenderingContext2D,
   text: string,
   bbox: Bbox,
+  fontStack = "'Segoe UI', sans-serif",
+  maxFontSize = 40,
 ) {
   const pad = 8;
   const maxW = bbox.x2 - bbox.x1 - pad * 2;
   const maxH = bbox.y2 - bbox.y1 - pad * 2;
   if (maxW <= 0 || maxH <= 0) return;
 
-  let fontSize = Math.min(22, maxH);
+  let fontSize = Math.min(maxFontSize, maxH);
   let lines: string[] = [];
 
-  // Shrink until it fits
-  while (fontSize >= 7) {
-    ctx.font = `600 ${fontSize}px 'Noto Sans', sans-serif`;
+  while (fontSize >= 8) {
+    ctx.font = `600 ${fontSize}px ${fontStack}`;
     lines = wrapText(ctx, text, maxW);
     if (lines.length * fontSize * 1.25 <= maxH) break;
     fontSize--;
@@ -360,6 +390,25 @@ export async function repaintWithTranslations(
   bboxes: Bbox[],
   translations: Translation[],
 ): Promise<string> {
+  const selectedFont = await storage.getItem<string>("sync:text-font") ?? "Segoe UI"
+  const customFonts = await storage.getItem<{ name: string; dataUrl: string }[]>("local:custom-fonts") ?? []
+
+  let fontStack = BUNDLED_FONT_STACKS[selectedFont];
+
+  if (!fontStack) {
+    const custom = customFonts.find((f) => f.name === selectedFont);
+    if (custom) {
+      const face = new FontFace(custom.name, `url(${custom.dataUrl})`);
+      await face.load();
+      document.fonts.add(face);
+      fontStack = `'${custom.name}', sans-serif`;
+    } else {
+      fontStack = "'Segoe UI', sans-serif";
+    }
+  }
+
+  console.log("Using font stack:", fontStack);
+  
   const response = await fetch(imageSrc);
   const blob = await response.blob();
   const bitmap = await createImageBitmap(blob);
@@ -382,7 +431,7 @@ export async function repaintWithTranslations(
 
   bboxes.forEach((bbox, i) => {
     const text = byBox.get(String(i + 1));
-    if (text) drawFittedText(ctx, text, bbox);
+    if (text) drawFittedText(ctx, text, bbox, fontStack);
   });
 
   return canvas.toDataURL("image/png");

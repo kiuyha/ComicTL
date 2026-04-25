@@ -1,9 +1,9 @@
 import Overlay from "@/lib/components/Overlay.svelte";
-import "@/assets/app.css";
 import { mount, unmount } from "svelte";
 import { ShadowRootContentScriptUi } from "#imports";
 import { getAdapter } from "@/lib/adapters";
 import { repaintWithTranslations } from "@/lib/utils";
+import "@/assets/app.css";
 
 export default defineContentScript({
   matches: ["<all_urls>"],

@@ -17,6 +17,8 @@
     Search,
     EyeOff,
     Eye,
+    Upload,
+    X,
   } from "lucide-svelte";
 
   let {
@@ -40,7 +42,6 @@
 
   let autoUpdateModel = $state(true);
   let minConfidence = $state(0.5);
-  let performanceOverlay = $state(false);
   let seriesContext = $state<SeriesContext>({
     title: seriesName,
     summary: "",
@@ -53,14 +54,25 @@
   let loadingSettings = $state(true);
   let hasApiKey = $derived(geminiKey.trim().length > 0);
   let saveTimer: ReturnType<typeof setTimeout>;
+  let textFont = $state("system");
+  let customFonts = $state<{ name: string; dataUrl: string }[]>([]);
+  let fontUploading = $state(false);
+  let isDraggingOver = $state(false);
 
-  const tabs = [
+  const BUNDLED_FONTS = [
+    { id: "system", label: "System", stack: "'Segoe UI', sans-serif" },
+    { id: "noto", label: "Noto Sans", stack: "'Noto Sans', sans-serif" },
+    { id: "bangers", label: "Bangers", stack: "'Bangers', cursive" },
+    { id: "comic", label: "Comic Neue", stack: "'Comic Neue', cursive" },
+  ] as const;
+
+  const TABS = [
     { id: "home", label: "Home", icon: Zap },
     { id: "context", label: "Context", icon: BookOpen },
     { id: "settings", label: "Settings", icon: SettingsIcon },
   ];
 
-  const modes = [
+  const MODES = [
     {
       id: "local",
       label: "Local",
@@ -84,7 +96,7 @@
     await storage.setItem("sync:is-first-run", false);
   }
 
-  let tabIndex = $derived(tabs.findIndex((t) => t.id === activeTab));
+  let tabIndex = $derived(TABS.findIndex((t) => t.id === activeTab));
   const languages: { code: string; name: string }[] = JSON.parse(
     import.meta.env.WXT_LANGUAGES ??
       `[{"code": "EN", "name": "English"}, {"code": "ID", "name": "Indonesian"}, {"code": "JA", "name": "Japanese"}, {"code": "KO", "name": "Korean"}, {"code": "ZH", "name": "Chinese"}, {"code": "ES", "name": "Spanish"}]`,
@@ -127,13 +139,14 @@
       "sync:share-data",
       "sync:auto-update-model",
       "sync:min-confidence",
-      "sync:performance-overlay",
       "sync:gemini-key",
       "sync:gemini-model",
       "sync:detection-model",
       "sync:current-mode",
       "local:active-device",
       `sync:context-${seriesName}`,
+      "sync:text-font",
+      "local:custom-fonts",
     ]);
 
     // Convert [{key: '...', value: '...'}, ...] into a simple lookup object
@@ -143,13 +156,15 @@
     shareData = saved["sync:share-data"] ?? shareData;
     autoUpdateModel = saved["sync:auto-update-model"] ?? autoUpdateModel;
     minConfidence = saved["sync:min-confidence"] ?? minConfidence;
-    performanceOverlay =
-      saved["sync:performance-overlay"] ?? performanceOverlay;
     geminiKey = saved["sync:gemini-key"] ?? geminiKey;
     geminiModel = saved["sync:gemini-model"] ?? geminiModel;
     detectionModel = saved["sync:detection-model"] ?? detectionModel;
     currentMode = saved["sync:current-mode"] ?? currentMode;
     activeDevice = saved["local:active-device"] ?? activeDevice;
+    textFont = saved["sync:text-font"] ?? textFont;
+    customFonts = Array.isArray(saved["local:custom-fonts"])
+      ? saved["local:custom-fonts"]
+      : [];
     const storedCtx = saved[`sync:context-${seriesName}`];
     if (storedCtx) {
       seriesContext = { ...seriesContext, ...storedCtx };
@@ -169,14 +184,18 @@
         { key: "sync:share-data", value: shareData },
         { key: "sync:auto-update-model", value: autoUpdateModel },
         { key: "sync:min-confidence", value: minConfidence },
-        { key: "sync:performance-overlay", value: performanceOverlay },
         { key: "sync:gemini-key", value: geminiKey },
         { key: "sync:gemini-model", value: geminiModel },
         { key: "sync:source-lang", value: sourceLang },
         { key: "sync:target-lang", value: targetLang },
         { key: "sync:detection-model", value: detectionModel },
         { key: "sync:current-mode", value: currentMode },
-        { key: `sync:context-${seriesName}`, value: seriesContext },
+        {
+          key: `sync:context-${seriesName}`,
+          value: $state.snapshot(seriesContext),
+        },
+        { key: "sync:text-font", value: textFont },
+        { key: "local:custom-fonts", value: $state.snapshot(customFonts) },
       ]);
     }, 150);
   }
@@ -189,7 +208,6 @@
         shareData,
         autoUpdateModel,
         minConfidence,
-        performanceOverlay,
         geminiKey,
         geminiModel,
         sourceLang,
@@ -199,8 +217,10 @@
         seriesContext.title,
         seriesContext.summary,
         seriesContext.dictionary,
+        textFont,
+        customFonts.length,
       ];
-  
+
       debouncedSave();
     }
   });
@@ -209,6 +229,51 @@
     const handleClick = () => (activeDropdown = null);
     window.addEventListener("click", handleClick);
     return () => window.removeEventListener("click", handleClick);
+  });
+
+  function processFontFile(file: File) {
+    if (!file.name.match(/\.(ttf|otf|woff|woff2)$/i)) {
+      alert("Please upload a .ttf, .otf, .woff, or .woff2 file");
+      return;
+    }
+
+    fontUploading = true;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const name = file.name.replace(/\.[^.]+$/, "");
+      customFonts = [...customFonts, { name, dataUrl }];
+      textFont = name;
+      fontUploading = false;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function handleFontUpload(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) processFontFile(file);
+    input.value = "";
+  }
+
+  function handleDrop(e: DragEvent) {
+    e.preventDefault();
+    const file = e.dataTransfer?.files?.[0];
+    if (file) processFontFile(file);
+  }
+
+  function deleteCustomFont(name: string) {
+    customFonts = customFonts.filter((f) => f.name !== name);
+    if (textFont === name) textFont = "system";
+  }
+
+  $effect(() => {
+    customFonts.forEach(({ name, dataUrl }) => {
+      if (!document.fonts.check(`12px "${name}"`)) {
+        const face = new FontFace(name, `url(${dataUrl})`);
+        face.load().then(() => document.fonts.add(face));
+      }
+    });
   });
 </script>
 
@@ -294,7 +359,7 @@
           100}%);"
       ></div>
 
-      {#each tabs as tab}
+      {#each TABS as tab}
         <button
           onclick={() => (activeTab = tab.id)}
           class="relative flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold transition-colors duration-300 cursor-pointer z-10 {activeTab ===
@@ -342,7 +407,7 @@
               </span>
 
               <div class="flex items-center gap-1">
-                {#each modes as mode}
+                {#each MODES as mode}
                   <button
                     disabled={mode.disable()}
                     onclick={() => (currentMode = mode.id)}
@@ -667,32 +732,117 @@
             </div>
           </div>
 
+          <div>
+            <span
+              class="text-sm font-bold uppercase tracking-widest text-zinc-500"
+            >
+              Typography
+            </span>
+
+            <div class="pt-2 space-y-3">
+              <!-- Bundled font picker -->
+              <div class="flex flex-col space-y-1.5">
+                <label
+                  for="bundled-fonts"
+                  class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1"
+                >
+                  Bubble Font
+                </label>
+                <div class="grid grid-cols-2 gap-1.5">
+                  {#each BUNDLED_FONTS as font}
+                    <button
+                      onclick={() => (textFont = font.id)}
+                      class="px-3 py-2 rounded-xl border text-sm transition-all cursor-pointer text-left
+                      {textFont === font.id
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                        : 'border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:border-zinc-400'}"
+                      style="font-family: {font.stack}"
+                    >
+                      {font.label}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+
+              <!-- Custom fonts list -->
+              {#if customFonts.length > 0}
+                <div class="flex flex-col space-y-1">
+                  <label
+                    for="custom-fonts"
+                    class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1"
+                  >
+                    Custom Fonts
+                  </label>
+                  {#each customFonts as font}
+                    <div
+                      class="flex items-center justify-between px-3 py-1.5 rounded-lg border cursor-pointer transition-all
+                      {textFont === font.name
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900'}"
+                      role="presentation"
+                      onclick={() => (textFont = font.name)}
+                    >
+                      <span
+                        class="text-sm truncate max-w-40"
+                        style="font-family: '{font.name}', sans-serif"
+                      >
+                        {font.name}
+                      </span>
+                      <button
+                        onclick={(e) => {
+                          e.stopPropagation();
+                          deleteCustomFont(font.name);
+                        }}
+                        class="text-zinc-400 hover:text-red-500 transition-colors ml-2 cursor-pointer"
+                        aria-label="Delete font"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+
+              <!-- Upload Drop Area -->
+              <label
+                ondragover={(e) => {
+                  e.preventDefault();
+                  isDraggingOver = true;
+                }}
+                ondragleave={() => (isDraggingOver = false)}
+                ondrop={(e) => {
+                  isDraggingOver = false;
+                  handleDrop(e);
+                }}
+                class="flex flex-col items-center justify-center gap-1.5 w-full py-4 px-3 rounded-xl border-2 border-dashed
+                transition-colors cursor-pointer
+                {isDraggingOver
+                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-500'
+                  : 'border-zinc-300 dark:border-zinc-700 text-zinc-500 hover:border-blue-400 hover:text-blue-500'}"
+              >
+                {#if fontUploading}
+                  <LoaderCircle size={18} class="animate-spin" />
+                  <span class="text-sm font-medium">Uploading...</span>
+                {:else}
+                  <Upload size={18} />
+                  <span class="text-sm font-medium">Drag & Drop Font Here</span>
+                  <span class="text-[10px] opacity-60">(.ttf, .otf, .woff)</span
+                  >
+                {/if}
+
+                <input
+                  type="file"
+                  accept=".ttf,.otf,.woff,.woff2"
+                  class="sr-only"
+                  onchange={handleFontUpload}
+                />
+              </label>
+            </div>
+          </div>
+
           <div
             class="border-t border-zinc-200 dark:border-zinc-800 pt-4 space-y-3"
           >
-            <label
-              class="flex items-center justify-between cursor-pointer group"
-            >
-              <span
-                class="text-sm font-medium group-hover:text-blue-500 transition-colors"
-                >Performance Overlay</span
-              >
-              <div class="relative flex items-center">
-                <input
-                  type="checkbox"
-                  bind:checked={performanceOverlay}
-                  class="peer sr-only"
-                />
-                <div
-                  class="h-4 w-4 rounded border-2 border-zinc-300 dark:border-zinc-700 peer-checked:bg-blue-500 peer-checked:border-blue-500 transition-all"
-                ></div>
-                <Check
-                  size={12}
-                  class="absolute text-white scale-0 peer-checked:scale-100 transition-transform left-0.5"
-                />
-              </div>
-            </label>
-
             <label
               class="flex items-center justify-between cursor-pointer group"
             >
