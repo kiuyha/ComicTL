@@ -29,6 +29,10 @@ jobs:
         run: |
           bun wxt zip
           bun wxt zip -b firefox
+        env:
+          WXT_DETECTION_MODEL_REPO: ${{ secrets.WXT_DETECTION_MODEL_REPO }}
+          WXT_SUPABASE_URL: ${{ secrets.WXT_SUPABASE_URL }}
+          WXT_SUPABASE_PUBLIC_KEY: ${{ secrets.WXT_SUPABASE_PUBLIC_KEY }}
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

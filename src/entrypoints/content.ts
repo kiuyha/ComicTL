@@ -2,7 +2,7 @@ import Overlay from "@/lib/components/Overlay.svelte";
 import { mount, unmount } from "svelte";
 import { ShadowRootContentScriptUi } from "#imports";
 import { getAdapter } from "@/lib/adapters";
-import { repaintWithTranslations } from "@/lib/utils";
+import { repaintWithTranslations, sendBboxData } from "@/lib/utils";
 import "@/assets/app.css";
 
 export default defineContentScript({
@@ -19,8 +19,10 @@ export default defineContentScript({
     browser.runtime.onMessage.addListener((msg) => {
       if (msg.type === "comictl-translate-image") {
         const adapter = getAdapter();
-        const seriesName = adapter.seriesName();
-        const translationKey = `page-cache-${seriesName}-${adapter.chapterId()}-${adapter.pageIndex()}`;
+        const seriesName = adapter.seriesName() ?? "Unknown Series";
+        const chapterId = adapter.chapterId();
+        const pageIndex = adapter.pageIndex();
+        const translationKey = `page-cache-${seriesName}-${chapterId}-${pageIndex}`;
         const originalSrc = translatedSrcMap.get(msg.data) ?? msg.data;
 
         if (overlays.has(originalSrc)) {
@@ -89,7 +91,12 @@ export default defineContentScript({
                   }),
 
                 // Sent bounding box to translation model and return translated image
-                requestTextTranslation: async (bboxes: Bbox[]) => {
+                requestTextTranslation: async (bboxes: Bbox[], isManuallySorted: boolean) => {
+                  // Share the bboxes information for future detection model
+                  const shareData =
+                    await storage.getItem<boolean>("sync:share-data");
+                  if (shareData && isManuallySorted) sendBboxData(seriesName, chapterId, pageIndex, bboxes, originalSrc);
+
                   const resp = await browser.runtime.sendMessage({
                     type: "TRANSLATE_IMAGE",
                     data: {
@@ -136,21 +143,20 @@ export default defineContentScript({
                     await storage.setItem(`sync:context-${seriesName}`, stored);
                   }
 
-                  return await repaintWithTranslations(
+                  const translatedSrc = await repaintWithTranslations(
                     originalSrc,
                     bboxes,
                     translations,
                   );
+                  translatedSrcMap.set(translatedSrc, originalSrc);
+
+                  return translatedSrc;
                 },
 
                 // Close overlay
                 onClose: () => {
                   overlays.get(originalSrc)?.ui?.remove();
                 },
-
-                // store the translated image src
-                onTranslated: (translatedSrc) =>
-                  translatedSrcMap.set(translatedSrc, originalSrc),
               },
             }),
 

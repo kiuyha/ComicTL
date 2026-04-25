@@ -1,10 +1,10 @@
 import * as ort from "onnxruntime-web/all";
 
 const BUNDLED_FONT_STACKS: Record<string, string> = {
-  system:  "'Segoe UI', sans-serif",
-  noto:    "'Noto Sans', sans-serif",
+  system: "'Segoe UI', sans-serif",
+  noto: "'Noto Sans', sans-serif",
   bangers: "'Bangers', cursive",
-  comic:   "'Comic Neue', cursive",
+  comic: "'Comic Neue', cursive",
 };
 
 async function fetchAsBase64(url: string) {
@@ -307,7 +307,10 @@ function wrapText(
         // Word doesn't fit — try hyphenating it
         if (ctx.measureText(word).width > maxW) {
           // Push whatever line we had first
-          if (line) { lines.push(line); line = ""; }
+          if (line) {
+            lines.push(line);
+            line = "";
+          }
 
           // Split the long word with hyphens
           let chunk = "";
@@ -390,8 +393,12 @@ export async function repaintWithTranslations(
   bboxes: Bbox[],
   translations: Translation[],
 ): Promise<string> {
-  const selectedFont = await storage.getItem<string>("sync:text-font") ?? "Segoe UI"
-  const customFonts = await storage.getItem<{ name: string; dataUrl: string }[]>("local:custom-fonts") ?? []
+  const selectedFont =
+    (await storage.getItem<string>("sync:text-font")) ?? "Segoe UI";
+  const customFonts =
+    (await storage.getItem<{ name: string; dataUrl: string }[]>(
+      "local:custom-fonts",
+    )) ?? [];
 
   let fontStack = BUNDLED_FONT_STACKS[selectedFont];
 
@@ -408,7 +415,7 @@ export async function repaintWithTranslations(
   }
 
   console.log("Using font stack:", fontStack);
-  
+
   const response = await fetch(imageSrc);
   const blob = await response.blob();
   const bitmap = await createImageBitmap(blob);
@@ -435,4 +442,30 @@ export async function repaintWithTranslations(
   });
 
   return canvas.toDataURL("image/png");
+}
+
+export function sendBboxData(
+  seriesName: string,
+  chapterId: string,
+  pageIndex: number,
+  bboxes: Bbox[],
+  originalSrc: string,
+) {
+  fetchAsBase64(originalSrc).then(
+    (imageBase64) =>
+      fetch(import.meta.env.WXT_SUPABASE_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.WXT_SUPABASE_PUBLIC_KEY}`,
+        },
+        body: JSON.stringify({
+          seriesName,
+          chapterId,
+          pageIndex,
+          bboxes,
+          imageBase64,
+        }),
+      }).catch(() => {}), // silently ignore failures
+  );
 }

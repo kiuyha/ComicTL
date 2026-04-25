@@ -25,9 +25,9 @@
     requestBubbleDetection: () => Promise<Bbox[] | { error: string }>;
     requestTextTranslation: (
       bboxes: Bbox[],
+      isManuallySorted: boolean
     ) => Promise<string | { error: string }>;
     onClose: () => void;
-    onTranslated: (translatedSrc: string) => void;
   }
 
   const PADDING_PX = 10;
@@ -42,7 +42,6 @@
     requestBubbleDetection,
     requestTextTranslation,
     onClose,
-    onTranslated,
   }: Props = $props();
 
   let toolbarPosition = $state<"top" | "bottom">("top");
@@ -137,14 +136,13 @@
     loadingMsg = "Please wait while we translate the text...";
     applyBboxesSort();
 
-    const translations = await requestTextTranslation($state.snapshot(bboxes));
+    const translations = await requestTextTranslation($state.snapshot(bboxes), isManuallySorted);
     if (typeof translations === "object" && translations?.error) {
       mode = "refining";
       showError(translations.error);
       return;
     } else if (typeof translations === "string") {
       translatedUrl = translations.trim();
-      onTranslated(translatedUrl);
       mode = "results";
     }
   }
