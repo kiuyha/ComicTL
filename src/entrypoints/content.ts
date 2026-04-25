@@ -2,26 +2,30 @@ import Overlay from "@/lib/components/Overlay.svelte";
 import "@/assets/app.css";
 import { mount, unmount } from "svelte";
 import { ShadowRootContentScriptUi } from "#imports";
-import { getBase64Image } from "@/lib/utils";
 
 export default defineContentScript({
   matches: ["<all_urls>"],
   cssInjectionMode: "ui",
 
   async main(ctx) {
-    let currentUi: ShadowRootContentScriptUi<any> | null = null;
-    let currentApp: ReturnType<typeof mount> | null = null;
+    const translatedSrcMap = new Map<string, string>();
+    const overlays = new Map<
+      string,
+      { ui: ShadowRootContentScriptUi<any>; wrapper: HTMLElement }
+    >();
 
     browser.runtime.onMessage.addListener((msg) => {
       if (msg.type === "comictl-translate-image") {
-        if (currentUi) {
-          currentUi.remove();
-          currentUi = null;
-          currentApp = null;
+        const originalSrc = translatedSrcMap.get(msg.data) ?? msg.data;
+        if (overlays.has(originalSrc)) {
+          overlays
+            .get(originalSrc)
+            ?.wrapper.dispatchEvent(new CustomEvent("comictl:back-to-refine"));
+          return;
         }
 
         const imgElement = document.querySelector(
-          `img[src="${CSS.escape(msg.data)}"]`,
+          `img[src="${CSS.escape(originalSrc)}"]`,
         ) as HTMLImageElement;
         if (!imgElement) return;
 
@@ -39,27 +43,27 @@ export default defineContentScript({
         imgElement.insertAdjacentElement("beforebegin", wrapper);
         wrapper.appendChild(imgElement);
 
-        const base64Img = getBase64Image(imgElement);
-
         createShadowRootUi(ctx, {
           name: "comictl-overlay",
           position: "inline",
           anchor: wrapper,
           append: "last",
 
-          onMount: (uiContainer) => {
-            currentApp = mount(Overlay, {
+          onMount: (uiContainer) =>
+            mount(Overlay, {
               target: uiContainer,
               props: {
+                wrapper,
                 targetImageRect: rect,
                 scaleX,
                 scaleY,
+                originalSrc,
 
                 // Sent img to detection model after init and return bounding boxes
                 requestBubbleDetection: () =>
                   browser.runtime.sendMessage({
                     type: "DETECT_BBOX",
-                    data: base64Img,
+                    data: originalSrc,
                   }),
 
                 // Sent bounding box to translation model and return translated image
@@ -67,32 +71,44 @@ export default defineContentScript({
                   browser.runtime.sendMessage({
                     type: "TRANSLATE_IMAGE",
                     data: {
-                      base64Img,
+                      src: originalSrc,
                       bboxes,
                     },
                   }),
 
                 // Close overlay
                 onClose: () => {
-                  currentUi?.remove();
+                  overlays.get(originalSrc)?.ui?.remove();
                 },
-              },
-            });
 
-            return currentApp;
-          },
+                // store the translated image src
+                onTranslated: (translatedSrc) =>
+                  translatedSrcMap.set(translatedSrc, originalSrc),
+              },
+            }),
 
           onRemove: (app) => {
             if (app) {
               unmount(app);
             }
+            overlays.delete(originalSrc);
+            translatedSrcMap.delete(originalSrc);
             if (imgElement.parentElement === wrapper) {
               wrapper.replaceWith(imgElement);
             }
           },
         }).then((ui) => {
-          currentUi = ui;
-          currentUi.mount();
+          overlays.set(originalSrc, { ui, wrapper });
+          ui.mount();
+
+          const observer = new MutationObserver(() => {
+            wrapper.style.display = imgElement.style.display;
+          });
+
+          observer.observe(imgElement, {
+            attributes: true,
+            attributeFilter: ["style"],
+          });
         });
       }
     });

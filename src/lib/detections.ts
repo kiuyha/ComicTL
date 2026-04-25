@@ -8,7 +8,7 @@ let currentModelName: string | null = null;
 let isDetecting = false;
 
 export async function detectTextBubble(
-  base64Img: string,
+  imageSrc: string,
   minConfidence: number = 0.5,
   requestedModel: string = "yolo26n",
   autoUpdateModel: boolean = true
@@ -26,7 +26,7 @@ export async function detectTextBubble(
   const DETECTION_MODEL_REPO = import.meta.env.WXT_DETECTION_MODEL_REPO;
   const DETECTION_MODEL_PATH = `onnx/${requestedModel}.onnx`;
 
-  const { imageData, origWidth, origHeight } = await scalingImage(base64Img);
+  const { imageData, origWidth, origHeight } = await scalingImage(imageSrc);
 
   if (!session) {
     session = await getModel(DETECTION_MODEL_REPO, DETECTION_MODEL_PATH, autoUpdateModel);
@@ -74,7 +74,6 @@ export async function detectTextBubble(
       const x2 = detections[i + 2];
       const y2 = detections[i + 3];
       const confidence = detections[i + 4];
-      const classId = detections[i + 5];
 
       if (Number.isNaN(confidence) || confidence < minConfidence) {
         continue;
@@ -87,7 +86,6 @@ export async function detectTextBubble(
             x2,
             y2,
             confidence,
-            classId,
           },
           origWidth,
           origHeight,

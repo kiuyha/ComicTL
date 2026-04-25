@@ -15,6 +15,8 @@
     ArrowRightLeft,
     ChevronDown,
     Search,
+    EyeOff,
+    Eye,
   } from "lucide-svelte";
 
   let isFirstRun = $state(true);
@@ -22,6 +24,7 @@
   let autoScan = $state(false);
   let shareData = $state(true);
   let geminiKey = $state("");
+  let showKey = $state(false);
   let geminiModel = $state("gemini-3.1-flash-lite-preview");
   let detectionModel = $state("yolo26n");
   let sourceLang = $state("EN");
@@ -479,15 +482,30 @@
             <label
               for="key"
               class="text-xs font-bold uppercase tracking-widest text-zinc-500 ml-1"
-              >Gemini API Key</label
             >
-            <input
-              id="key"
-              type="password"
-              bind:value={geminiKey}
-              placeholder="AIzaSy..."
-              class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-            />
+              Gemini API Key
+            </label>
+            <div class="relative">
+              <input
+                id="key"
+                type={showKey ? "text" : "password"}
+                bind:value={geminiKey}
+                placeholder="AIzaSy..."
+                class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 pr-11 text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+              />
+              <button
+                type="button"
+                onclick={() => (showKey = !showKey)}
+                class="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors focus:outline-none rounded-xl"
+                aria-label={showKey ? "Hide key" : "Show key"}
+              >
+                {#if showKey}
+                  <EyeOff size={18} />
+                {:else}
+                  <Eye size={18} />
+                {/if}
+              </button>
+            </div>
           </div>
 
           {#if currentMode === "cloud"}

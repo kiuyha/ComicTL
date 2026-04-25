@@ -1,14 +1,15 @@
 import { drawNumberedBboxes } from "./utils";
 
 export async function translateWithGemini(
-  base64Image: string,
+  imageSrc: string,
   bboxes: Bbox[],
   apiKey: string,
   targetLang: string,
   sourceLang?: string,
   modelType = "gemini-3.1-flash-lite-preview",
-) {
-  const cleanBase64 = (await drawNumberedBboxes(base64Image, bboxes)).replace(
+  mimeType = "image/jpeg",
+): Promise<Translation[]> {
+  const cleanBase64 = (await drawNumberedBboxes(imageSrc, bboxes)).replace(
     /^data:image\/(png|jpeg|webp);base64,/,
     "",
   );
@@ -31,7 +32,7 @@ export async function translateWithGemini(
             { text: prompt },
             {
               inlineData: {
-                mimeType: "image/jpeg",
+                mimeType: mimeType,
                 data: cleanBase64,
               },
             },

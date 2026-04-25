@@ -9,15 +9,21 @@
     Redo,
     ArrowUpNarrowWide,
     ArrowDownUp,
+    TriangleAlert,
   } from "lucide-svelte";
 
   interface Props {
     targetImageRect: DOMRect;
     scaleX: number;
     scaleY: number;
-    requestBubbleDetection: () => Promise<Bbox[]>;
-    requestTextTranslation: (bboxes: Bbox[]) => Promise<string>;
+    originalSrc: string;
+    wrapper: HTMLElement;
+    requestBubbleDetection: () => Promise<Bbox[] | { error: string }>;
+    requestTextTranslation: (
+      bboxes: Bbox[],
+    ) => Promise<string | { error: string }>;
     onClose: () => void;
+    onTranslated: (translatedSrc: string) => void;
   }
 
   const PADDING_PX = 10;
@@ -26,16 +32,21 @@
     targetImageRect,
     scaleX,
     scaleY,
+    originalSrc,
+    wrapper,
     requestBubbleDetection,
     requestTextTranslation,
     onClose,
+    onTranslated,
   }: Props = $props();
 
   let toolbarPosition = $state<"top" | "bottom">("top");
   let mode = $state<"loading" | "refining" | "results">("loading");
   let bboxes = $state<Bbox[]>([]);
   let isManuallySorted = $state(false);
-  let imageUrl = $state("");
+  let translatedUrl = $state("");
+  let showOriginal = $state(false);
+  let previousImageUrl = $state("");
   let activeIndex = $state<number | null>(null);
   let dragInfo = $state<{
     index: number;
@@ -46,6 +57,15 @@
   } | null>(null);
   let history = $state<Bbox[][]>([]);
   let historyIndex = $state(-1);
+  let loadingMsg = $state("Please wait while we find the text...");
+  let errorMsg = $state("");
+  let errorTimer: ReturnType<typeof setTimeout>;
+
+  function showError(msg: string) {
+    clearTimeout(errorTimer);
+    errorMsg = msg;
+    errorTimer = setTimeout(() => (errorMsg = ""), 5000);
+  }
 
   function applyBboxesSort() {
     let totalHeight = 0;
@@ -108,8 +128,20 @@
   async function handleConfirm() {
     if (mode !== "refining") return;
 
-    imageUrl = (await requestTextTranslation(bboxes)).trim();
-    mode = "results";
+    mode = "loading";
+    loadingMsg = "Please wait while we translate the text...";
+    applyBboxesSort();
+
+    const translations = await requestTextTranslation(bboxes);
+    if (typeof translations === "object" && translations?.error) {
+      mode = "refining";
+      showError(translations.error);
+      return;
+    } else if (typeof translations === "string") {
+      translatedUrl = translations.trim();
+      onTranslated(translatedUrl);
+      mode = "results";
+    }
   }
 
   function deleteActiveBox() {
@@ -126,8 +158,8 @@
       {
         x1: targetImageRect.left,
         y1: targetImageRect.top,
-        x2: Math.random() * targetImageRect.width + targetImageRect.left,
-        y2: Math.random() * targetImageRect.height + targetImageRect.top,
+        x2: 0.5 * targetImageRect.width + targetImageRect.left,
+        y2: 0.5 * targetImageRect.height + targetImageRect.top,
       },
     ];
     if (!isManuallySorted) {
@@ -155,6 +187,16 @@
 
   onMount(async () => {
     const rawBboxes = await requestBubbleDetection();
+
+    if (!Array.isArray(rawBboxes)) {
+      showError(rawBboxes?.error);
+      setTimeout(() => onClose(), 5000); // closes after error fades
+      return;
+    }
+
+    if (rawBboxes.length === 0) {
+      showError("No text bubbles detected — add boxes manually");
+    }
 
     bboxes = rawBboxes.map((box) => ({
       x1: Math.max(0, box.x1 - PADDING_PX),
@@ -268,18 +310,29 @@
       dragInfo = null;
     };
 
+    const handleBackToRefine = () => {
+      if (mode === "results") {
+        previousImageUrl = translatedUrl;
+        mode = "refining";
+      }
+    };
+
     if (dragInfo) {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
     }
-    window.addEventListener("click", handleClick, { capture: true });
+    if (mode === "refining")
+      window.addEventListener("click", handleClick, { capture: true });
     window.addEventListener("keydown", handleKeyDown);
+    wrapper.addEventListener("comictl:back-to-refine", handleBackToRefine);
 
     return () => {
-      window.removeEventListener("click", handleClick, { capture: true });
+      if (mode === "refining")
+        window.removeEventListener("click", handleClick, { capture: true });
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("comictl:back-to-refine", handleBackToRefine);
     };
   });
 
@@ -311,14 +364,20 @@
   id="comictl-overlay"
   role="presentation"
   class="absolute top-0 left-0 overflow-hidden pointer-events-auto group z-50 w-full h-full"
-  onclick={(e) => e.stopPropagation()}
+  onclick={(e) => {
+    if (mode !== "results") e.stopPropagation();
+  }}
 >
   {#if mode === "loading"}
-    <div class="absolute inset-0 bg-black/50 transition-all duration-300"></div>
     <div
-      class="absolute inset-0 flex items-center justify-center z-70 backdrop-blur-[1px]"
+      class="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center z-70"
     >
-      <LoaderCircle size={48} class="animate-spin text-white" />
+      <div class="flex flex-col items-center gap-3">
+        <LoaderCircle size={40} class="animate-spin text-white" />
+        <p class="text-white text-sm font-medium tracking-wide animate-pulse">
+          {loadingMsg}
+        </p>
+      </div>
     </div>
   {/if}
 
@@ -336,7 +395,13 @@
         class="relative bg-white shadow-lg rounded-lg p-2 flex gap-2 border border-gray-200"
       >
         <button
-          onclick={onClose}
+          onclick={() => {
+            if (previousImageUrl) {
+              translatedUrl = previousImageUrl;
+              previousImageUrl = "";
+              mode = "results";
+            } else onClose();
+          }}
           class="absolute -top-2 -right-2 cursor-pointer bg-gray-200 rounded-full p-1 hover:bg-gray-300 transition-colors"
         >
           <X size={18} />
@@ -476,10 +541,33 @@
 
   {#if mode === "results"}
     <img
-      src={imageUrl}
-      alt="Translated Img"
+      src={showOriginal ? originalSrc : translatedUrl}
+      alt={showOriginal ? "Original Img" : "Translated Img"}
       class="w-full h-full object-contain"
     />
+    <button
+      onclick={(e) => {
+        e.stopPropagation();
+        showOriginal = !showOriginal;
+      }}
+      class="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white text-xs font-medium px-2 py-1 rounded-md transition-colors backdrop-blur-sm z-50"
+    >
+      {showOriginal ? "Translated" : "Original"}
+    </button>
+  {/if}
+
+  {#if errorMsg}
+    <div
+      class="absolute inset-0 flex items-center justify-center z-70 bg-black/40 backdrop-blur-[1px]"
+    >
+      <div
+        class="flex flex-col items-center gap-3 bg-white rounded-xl shadow-xl px-6 py-5 max-w-[80%] text-center
+                animate-[fadeSlideUp_0.3s_ease_forwards]"
+      >
+        <TriangleAlert size={32} class="text-red-500 shrink-0" />
+        <p class="text-sm font-medium text-red-600">{errorMsg}</p>
+      </div>
+    </div>
   {/if}
 </div>
 
@@ -513,5 +601,15 @@
   button {
     appearance: none;
     outline: none;
+  }
+  @keyframes fadeSlideUp {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 </style>

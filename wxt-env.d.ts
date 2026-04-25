@@ -11,5 +11,9 @@ interface Bbox {
   x2: number;
   y2: number;
   confidence?: number;
-  classId?: number;
+}
+
+interface Translation {
+  box: string;
+  text: string;
 }

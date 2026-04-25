@@ -1,15 +1,18 @@
 import * as ort from "onnxruntime-web/all";
 
-export function getBase64Image(img: HTMLImageElement): string {
-  const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-
-  const ctx = canvas.getContext("2d");
-  ctx?.drawImage(img, 0, 0);
-
-  // Compress slightly as a JPEG to keep the message payload lightweight
-  return canvas.toDataURL("image/jpeg", 0.9);
+async function fetchAsBase64(url: string) {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  const mimeType = blob.type || "image/jpeg";
+  const arrayBuffer = await blob.arrayBuffer();
+  const uint8 = new Uint8Array(arrayBuffer);
+  const chunkSize = 8192;
+  let binary = "";
+  for (let i = 0; i < uint8.length; i += chunkSize) {
+    binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
+  }
+  const base64 = btoa(binary);
+  return `data:${mimeType};base64,${base64}`;
 }
 
 export async function getModel(
@@ -51,11 +54,8 @@ export async function getModel(
   });
 }
 
-export async function scalingImage(
-  base64Img: string,
-  modelSize: number = 1280,
-) {
-  const response = await fetch(base64Img);
+export async function scalingImage(imageSrc: string, modelSize: number = 1280) {
+  const response = await fetch(imageSrc);
   const blob = await response.blob();
   const bitmap = await createImageBitmap(blob);
 
@@ -107,7 +107,7 @@ export function restoreBoundingBox(
 }
 
 export async function drawNumberedBboxes(
-  base64Img: string,
+  imageSrc: string,
   bboxes: Bbox[],
 ): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -162,6 +162,218 @@ export async function drawNumberedBboxes(
 
     img.onerror = () =>
       reject(new Error("Failed to load image for canvas drawing"));
-    img.src = base64Img;
+    fetchAsBase64(imageSrc).then((base64) => (img.src = base64));
   });
+}
+
+/**
+ * Samples the average color of a rectangular region from ImageData.
+ */
+function sampleRegionAvg(
+  data: Uint8ClampedArray,
+  w: number,
+  rx: number,
+  ry: number,
+  rw: number,
+  rh: number,
+) {
+  let r = 0,
+    g = 0,
+    b = 0,
+    n = 0;
+  for (let y = ry; y < ry + rh; y++) {
+    for (let x = rx; x < rx + rw; x++) {
+      const i = (y * w + x) * 4;
+      r += data[i];
+      g += data[i + 1];
+      b += data[i + 2];
+      n++;
+    }
+  }
+  return n ? [r / n, g / n, b / n] : [255, 255, 255];
+}
+
+/**
+ * Fills a bbox by interpolating from its 4 surrounding edges — handles gradients
+ * and textured backgrounds better than a flat fill. Works pixel-by-pixel on the
+ * raw ImageData buffer so there's only one getImageData/putImageData round trip.
+ */
+function inpaintBbox(imgData: ImageData, bbox: Bbox, margin = 4) {
+  const { data, width, height } = imgData;
+  const x1 = Math.max(0, Math.round(bbox.x1));
+  const y1 = Math.max(0, Math.round(bbox.y1));
+  const x2 = Math.min(width - 1, Math.round(bbox.x2));
+  const y2 = Math.min(height - 1, Math.round(bbox.y2));
+
+  const clamp = (v: number, lo: number, hi: number) =>
+    Math.max(lo, Math.min(hi, v));
+
+  // Pre-sample edge strips rather than hitting individual pixels per loop
+  const edgeL = (py: number) => {
+    const sx = clamp(x1 - margin, 0, width - 1);
+    return sampleRegionAvg(data, width, sx, py, clamp(margin, 1, x1), 1);
+  };
+  const edgeR = (py: number) => {
+    const sx = clamp(x2 + 1, 0, width - 1);
+    return sampleRegionAvg(
+      data,
+      width,
+      sx,
+      py,
+      clamp(margin, 1, width - sx),
+      1,
+    );
+  };
+  const edgeT = (px: number) => {
+    const sy = clamp(y1 - margin, 0, height - 1);
+    return sampleRegionAvg(data, width, px, sy, 1, clamp(margin, 1, y1));
+  };
+  const edgeB = (px: number) => {
+    const sy = clamp(y2 + 1, 0, height - 1);
+    return sampleRegionAvg(
+      data,
+      width,
+      px,
+      sy,
+      1,
+      clamp(margin, 1, height - sy),
+    );
+  };
+
+  const bw = x2 - x1 || 1;
+  const bh = y2 - y1 || 1;
+
+  for (let py = y1; py <= y2; py++) {
+    const ty = (py - y1) / bh;
+
+    for (let px = x1; px <= x2; px++) {
+      const tx = (px - x1) / bw;
+
+      const l = edgeL(py),
+        r = edgeR(py);
+      const t = edgeT(px),
+        b = edgeB(px);
+
+      // Blend horizontal + vertical gradients, weighted toward edges
+      const idx = (py * width + px) * 4;
+      for (let c = 0; c < 3; c++) {
+        const h = l[c] * (1 - tx) + r[c] * tx;
+        const v = t[c] * (1 - ty) + b[c] * ty;
+        // Edge-distance weighting: pixels near borders trust their closer edge more
+        const wx = Math.min(tx, 1 - tx) * 2; // 0 near L/R edges, 1 at center
+        const wy = Math.min(ty, 1 - ty) * 2;
+        data[idx + c] =
+          h * (1 - wy * 0.5) * 0.5 + v * (1 - wx * 0.5) * 0.5 + (h + v) * 0.25;
+      }
+      data[idx + 3] = 255;
+    }
+  }
+}
+
+/**
+ * Word-wraps text to fit maxWidth, returns lines.
+ */
+function wrapText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxW: number,
+): string[] {
+  const lines: string[] = [];
+  // Handle explicit newlines too
+  for (const paragraph of text.split("\n")) {
+    const words = paragraph.split(" ");
+    let line = "";
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (ctx.measureText(candidate).width <= maxW) {
+        line = candidate;
+      } else {
+        if (line) lines.push(line);
+        line = word;
+      }
+    }
+    if (line) lines.push(line);
+  }
+  return lines;
+}
+
+/**
+ * Shrinks font until the wrapped text fits inside the bbox, then draws it centered.
+ */
+function drawFittedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  bbox: Bbox,
+) {
+  const pad = 8;
+  const maxW = bbox.x2 - bbox.x1 - pad * 2;
+  const maxH = bbox.y2 - bbox.y1 - pad * 2;
+  if (maxW <= 0 || maxH <= 0) return;
+
+  let fontSize = Math.min(22, maxH);
+  let lines: string[] = [];
+
+  // Shrink until it fits
+  while (fontSize >= 7) {
+    ctx.font = `600 ${fontSize}px 'Segoe UI', sans-serif`;
+    lines = wrapText(ctx, text, maxW);
+    if (lines.length * fontSize * 1.25 <= maxH) break;
+    fontSize--;
+  }
+
+  const lineH = fontSize * 1.25;
+  const blockH = lines.length * lineH;
+  const startY = bbox.y1 + pad + Math.max(0, (maxH - blockH) / 2);
+  const centerX = (bbox.x1 + bbox.x2) / 2;
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+
+  // Thin white stroke for legibility on any background
+  ctx.lineWidth = fontSize * 0.25;
+  ctx.strokeStyle = "rgba(255,255,255,0.85)";
+  ctx.fillStyle = "#1a1a1a";
+
+  lines.forEach((line, i) => {
+    const y = startY + i * lineH;
+    ctx.strokeText(line, centerX, y);
+    ctx.fillText(line, centerX, y);
+  });
+}
+
+/**
+ * Inpaints bboxes on a manga image then renders translated text into each one.
+ * Returns an object URL (more efficient than base64 for display).
+ */
+export async function repaintWithTranslations(
+  imageSrc: string,
+  bboxes: Bbox[],
+  translations: Translation[],
+): Promise<string> {
+  const response = await fetch(imageSrc);
+  const blob = await response.blob();
+  const bitmap = await createImageBitmap(blob);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+
+  // Single getImageData → inpaint all bboxes in-buffer → single putImageData
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  for (const bbox of bboxes) inpaintBbox(imgData, bbox);
+  ctx.putImageData(imgData, 0, 0);
+
+  // Map "1"-indexed box numbers to text
+  const byBox = new Map(translations.map((t) => [t.box, t.text]));
+
+  bboxes.forEach((bbox, i) => {
+    const text = byBox.get(String(i + 1));
+    if (text) drawFittedText(ctx, text, bbox);
+  });
+
+  return canvas.toDataURL("image/png");
 }
