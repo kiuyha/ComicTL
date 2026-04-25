@@ -4,9 +4,9 @@ import { repaintWithTranslations } from "@/lib/utils";
 
 browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
   if (msg.type === "OFFSCREEN_DETECT_BBOX") {
-    const { selectedModel, autoUpdateModel } = msg.config;
+    const { selectedModel, autoUpdateModel, minConfidence } = msg.config;
 
-    detectTextBubble(msg.data, 0.5, selectedModel, autoUpdateModel).then(
+    detectTextBubble(msg.data, minConfidence, selectedModel, autoUpdateModel).then(
       sendResponse,
     ).catch((err) => sendResponse({ error : err.message }));
 

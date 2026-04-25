@@ -114,50 +114,60 @@ export async function drawNumberedBboxes(
     const img = new Image();
 
     img.onload = () => {
+      // Set a reasonable max width for AI ingestion
+      const MAX_WIDTH = 1024;
+      let scale = 1;
+
+      if (img.width > MAX_WIDTH) {
+        scale = MAX_WIDTH / img.width;
+      }
+
       const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
       const ctx = canvas.getContext("2d");
 
       if (!ctx) {
         return reject(new Error("Failed to get 2d canvas context"));
       }
 
-      ctx.drawImage(img, 0, 0);
+      // Draw the image scaled down
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
       bboxes.forEach((box, index) => {
-        const width = box.x2 - box.x1;
-        const height = box.y2 - box.y1;
+        // Scale the incoming coordinates to match the new canvas size
+        const x1 = box.x1 * scale;
+        const y1 = box.y1 * scale;
+        const width = (box.x2 - box.x1) * scale;
+        const height = (box.y2 - box.y1) * scale;
         const boxNumber = (index + 1).toString();
 
-        // Draw the highly visible red bounding box
-        ctx.lineWidth = 4;
+        ctx.lineWidth = Math.max(2, 4 * scale);
         ctx.strokeStyle = "#ef4444";
-        ctx.strokeRect(box.x1, box.y1, width, height);
+        ctx.strokeRect(x1, y1, width, height);
 
-        // Calculate text size to draw a solid background block
-        ctx.font = "bold 28px sans-serif";
+        const fontSize = Math.max(14, Math.floor(28 * scale));
+        ctx.font = `bold ${fontSize}px sans-serif`;
         const textMetrics = ctx.measureText(boxNumber);
-        const labelWidth = textMetrics.width + 12;
-        const labelHeight = 36;
+        
+        const labelWidth = textMetrics.width + (12 * scale);
+        const labelHeight = Math.max(18, 36 * scale);
 
-        // Position the label above the box
-        let labelY = box.y1 - labelHeight;
+        let labelY = y1 - labelHeight;
         if (labelY < 0) {
-          labelY = box.y1;
+          labelY = y1;
         }
 
-        // Draw the solid red background for the number
         ctx.fillStyle = "#ef4444";
-        ctx.fillRect(box.x1, labelY, labelWidth, labelHeight);
+        ctx.fillRect(x1, labelY, labelWidth, labelHeight);
 
-        // Draw the white number over the red block
         ctx.fillStyle = "#ffffff";
         ctx.textBaseline = "top";
-        ctx.fillText(boxNumber, box.x1 + 6, labelY + 4);
+        ctx.fillText(boxNumber, x1 + (6 * scale), labelY + (4 * scale));
       });
 
-      resolve(canvas.toDataURL("image/jpeg", 1));
+      // Export at 75% quality
+      resolve(canvas.toDataURL("image/jpeg", 0.75));
     };
 
     img.onerror = () =>

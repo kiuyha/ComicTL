@@ -33,6 +33,7 @@
   let searchQuery = $state("");
 
   let autoUpdateModel = $state(true);
+  let minConfidence = $state(0.5);
   let performanceOverlay = $state(false);
   let seriesSummary = $state("");
   let dictionaryStr = $state("");
@@ -113,6 +114,8 @@
     shareData = (await storage.getItem("sync:share-data")) ?? shareData;
     autoUpdateModel =
       (await storage.getItem("sync:auto-update-model")) ?? autoUpdateModel;
+    minConfidence =
+      (await storage.getItem("sync:min-confidence")) ?? minConfidence;
     performanceOverlay =
       (await storage.getItem("sync:performance-overlay")) ?? performanceOverlay;
     geminiKey = (await storage.getItem("sync:gemini-key")) ?? geminiKey;
@@ -133,6 +136,7 @@
       storage.setItem("sync:is-first-run", isFirstRun);
       storage.setItem("sync:share-data", shareData);
       storage.setItem("sync:auto-update-model", autoUpdateModel);
+      storage.setItem("sync:min-confidence", minConfidence);
       storage.setItem("sync:performance-overlay", performanceOverlay);
       storage.setItem("sync:gemini-key", geminiKey);
       storage.setItem("sync:gemini-model", geminiModel);
@@ -394,8 +398,9 @@
                       <button
                         onclick={() => selectLanguage(lang.code)}
                         class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors
-              {(activeDropdown === 'source' ? sourceLang : targetLang) ===
-                        lang.code
+                      {(activeDropdown === 'source'
+                          ? sourceLang
+                          : targetLang) === lang.code
                           ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 font-bold'
                           : ''}"
                       >
@@ -478,89 +483,121 @@
           out:fade={{ duration: 150 }}
           class="col-start-1 row-start-1 space-y-5 flex flex-col h-full"
         >
-          <div class="space-y-1.5">
-            <label
-              for="key"
-              class="text-xs font-bold uppercase tracking-widest text-zinc-500 ml-1"
+          <div>
+            <span
+              class="text-sm font-bold uppercase tracking-widest text-zinc-500"
+              >Detection</span
             >
-              Gemini API Key
-            </label>
-            <div class="relative">
-              <input
-                id="key"
-                type={showKey ? "text" : "password"}
-                bind:value={geminiKey}
-                placeholder="AIzaSy..."
-                class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 pr-11 text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-              />
-              <button
-                type="button"
-                onclick={() => (showKey = !showKey)}
-                class="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors focus:outline-none rounded-xl"
-                aria-label={showKey ? "Hide key" : "Show key"}
-              >
-                {#if showKey}
-                  <EyeOff size={18} />
-                {:else}
-                  <Eye size={18} />
-                {/if}
-              </button>
+            <div class="grid grid-cols-3 gap-3 pt-2">
+              <div class="flex flex-col space-y-1.5">
+                <label
+                  for="detection-model"
+                  class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1"
+                  >Model</label
+                >
+                <select
+                  id="detection-model"
+                  bind:value={detectionModel}
+                  class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-2.5 text-xs outline-none cursor-pointer"
+                >
+                  {#each detectionModels as model}
+                    <option value={model.id}>{model.label}</option>
+                  {/each}
+                </select>
+              </div>
+
+              <div class="flex flex-col space-y-1.5">
+                <label
+                  for="detection-model"
+                  class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1"
+                  >Min Confidence</label
+                >
+                <input
+                  id="min-confidence"
+                  type="number"
+                  bind:value={minConfidence}
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-2.5 text-xs outline-none cursor-pointer"
+                />
+              </div>
+
+              <div class="flex flex-col space-y-1.5">
+                <label
+                  for="updates"
+                  class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1"
+                  >Auto-Update</label
+                >
+                <div class="h-full flex items-center px-2">
+                  <label
+                    class="relative inline-flex items-center cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      bind:checked={autoUpdateModel}
+                      class="sr-only peer"
+                    />
+                    <div
+                      class="w-9 h-5 bg-zinc-300 dark:bg-zinc-700 rounded-full peer peer-checked:bg-blue-500 transition-all after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"
+                    ></div>
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
 
-          {#if currentMode === "cloud"}
-            <div class="space-y-1.5">
-              <label
-                for="gemini-model"
-                class="text-xs font-bold uppercase tracking-widest text-zinc-500 ml-1"
-                >Gemini Model</label
-              >
-              <select
-                id="gemini-model"
-                bind:value={geminiModel}
-                class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-2.5 text-xs outline-none cursor-pointer"
-              >
-                {#each geminiModels as model}
-                  <option value={model.id}>{model.label}</option>
-                {/each}
-              </select>
-            </div>
-          {/if}
-
-          <div class="grid grid-cols-2 gap-3 pt-2">
-            <div class="flex flex-col space-y-1.5">
-              <label
-                for="detection-model"
-                class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1"
-                >Detection</label
-              >
-              <select
-                id="detection-model"
-                bind:value={detectionModel}
-                class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-2.5 text-xs outline-none cursor-pointer"
-              >
-                {#each detectionModels as model}
-                  <option value={model.id}>{model.label}</option>
-                {/each}
-              </select>
-            </div>
-            <div class="flex flex-col space-y-1.5">
-              <label
-                for="updates"
-                class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1"
-                >Auto-Update</label
-              >
-              <div class="h-full flex items-center px-2">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    bind:checked={autoUpdateModel}
-                    class="sr-only peer"
-                  />
-                  <div
-                    class="w-9 h-5 bg-zinc-300 dark:bg-zinc-700 rounded-full peer peer-checked:bg-blue-500 transition-all after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-4"
-                  ></div>
+          <div>
+            <span
+              class="text-sm font-bold uppercase tracking-widest text-zinc-500"
+              >Gemini</span
+            >
+            <div class="grid grid-cols-2 gap-3 pt-2">
+              <div class="space-y-1.5">
+                <label
+                  for="key"
+                  class="text-xs font-bold uppercase tracking-widest text-zinc-500 ml-1"
+                >
+                  API Key
                 </label>
+                <div class="relative">
+                  <input
+                    id="key"
+                    type={showKey ? "text" : "password"}
+                    bind:value={geminiKey}
+                    placeholder="AIzaSy..."
+                    class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 pr-11 text-sm focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                  />
+                  <button
+                    type="button"
+                    onclick={() => (showKey = !showKey)}
+                    class="absolute inset-y-0 right-0 flex items-center pr-3 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors focus:outline-none rounded-xl"
+                    aria-label={showKey ? "Hide key" : "Show key"}
+                  >
+                    {#if showKey}
+                      <EyeOff size={18} />
+                    {:else}
+                      <Eye size={18} />
+                    {/if}
+                  </button>
+                </div>
+              </div>
+  
+              <div class="space-y-1.5">
+                <label
+                  for="gemini-model"
+                  class="text-xs font-bold uppercase tracking-widest text-zinc-500 ml-1"
+                  >Model</label
+                >
+                <select
+                  id="gemini-model"
+                  bind:value={geminiModel}
+                  class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-2.5 outline-none cursor-pointer"
+                >
+                  {#each geminiModels as model}
+                    <option value={model.id}>{model.label}</option>
+                  {/each}
+                </select>
               </div>
             </div>
           </div>

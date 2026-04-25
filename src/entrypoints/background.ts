@@ -44,6 +44,8 @@ export default defineBackground(() => {
             (await storage.getItem<string>("sync:gemini-model")),
           autoUpdateModel:
             (await storage.getItem<boolean>("sync:auto-update-model")) ?? true,
+          minConfidence:
+            (await storage.getItem<number>("sync:min-confidence")) ?? 0.5,
         };
 
         const response = await browser.runtime.sendMessage({
