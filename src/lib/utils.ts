@@ -325,7 +325,7 @@ function drawFittedText(
 
   // Shrink until it fits
   while (fontSize >= 7) {
-    ctx.font = `600 ${fontSize}px 'Segoe UI', sans-serif`;
+    ctx.font = `600 ${fontSize}px 'Noto Sans', sans-serif`;
     lines = wrapText(ctx, text, maxW);
     if (lines.length * fontSize * 1.25 <= maxH) break;
     fontSize--;

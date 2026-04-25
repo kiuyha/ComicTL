@@ -2,6 +2,8 @@ import Overlay from "@/lib/components/Overlay.svelte";
 import "@/assets/app.css";
 import { mount, unmount } from "svelte";
 import { ShadowRootContentScriptUi } from "#imports";
+import { getAdapter } from "@/lib/adapters";
+import { repaintWithTranslations } from "@/lib/utils";
 
 export default defineContentScript({
   matches: ["<all_urls>"],
@@ -16,7 +18,11 @@ export default defineContentScript({
 
     browser.runtime.onMessage.addListener((msg) => {
       if (msg.type === "comictl-translate-image") {
+        const adapter = getAdapter();
+        const seriesName = adapter.seriesName();
+        const translationKey = `page-cache-${seriesName}-${adapter.chapterId()}-${adapter.pageIndex()}`;
         const originalSrc = translatedSrcMap.get(msg.data) ?? msg.data;
+
         if (overlays.has(originalSrc)) {
           overlays
             .get(originalSrc)
@@ -59,6 +65,22 @@ export default defineContentScript({
                 scaleY,
                 originalSrc,
 
+                getTranslationCache: async () => {
+                  const cache = await storage.getItem<PageCache>(
+                    `local:${translationKey}`,
+                  );
+                  return cache
+                    ? {
+                        bboxes: cache.bboxes,
+                        translatedSrc: await repaintWithTranslations(
+                          originalSrc,
+                          cache.bboxes,
+                          cache.translations,
+                        ),
+                      }
+                    : null;
+                },
+
                 // Sent img to detection model after init and return bounding boxes
                 requestBubbleDetection: () =>
                   browser.runtime.sendMessage({
@@ -67,14 +89,59 @@ export default defineContentScript({
                   }),
 
                 // Sent bounding box to translation model and return translated image
-                requestTextTranslation: (bboxes: Bbox[]) =>
-                  browser.runtime.sendMessage({
+                requestTextTranslation: async (bboxes: Bbox[]) => {
+                  const resp = await browser.runtime.sendMessage({
                     type: "TRANSLATE_IMAGE",
                     data: {
                       src: originalSrc,
                       bboxes,
+                      seriesContext: await storage.getItem<SeriesContext>(
+                        `sync:context-${seriesName}`,
+                      ),
                     },
-                  }),
+                  });
+
+                  if (resp?.error) return resp;
+
+                  const { translations, context } = resp;
+
+                  // save translation cache
+                  await storage.setItem<PageCache>(`local:${translationKey}`, {
+                    bboxes,
+                    translations,
+                  });
+
+                  // save series context
+                  const stored = (await storage.getItem<SeriesContext>(
+                    `sync:context-${seriesName}`,
+                  )) ?? {
+                    summary: "",
+                    dictionary: "",
+                    translatedCount: 0,
+                    recentHistory: [],
+                  };
+                  if (stored) {
+                    if (context) {
+                      stored.summary = context.summary ?? stored.summary;
+                      stored.dictionary =
+                        context.dictionary ?? stored.dictionary;
+                    }
+                    stored.translatedCount += 1;
+
+                    // keeps last 5 after push
+                    stored.recentHistory = [
+                      ...stored.recentHistory.slice(-4),
+                      translations,
+                    ];
+                    await storage.setItem(`sync:context-${seriesName}`, stored);
+                  }
+
+                  return await repaintWithTranslations(
+                    originalSrc,
+                    bboxes,
+                    translations,
+                  );
+                },
 
                 // Close overlay
                 onClose: () => {

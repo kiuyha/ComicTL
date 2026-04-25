@@ -17,3 +17,17 @@ interface Translation {
   box: string;
   text: string;
 }
+
+interface SeriesContext {
+  title: string;
+  summary: string;
+  dictionary: string;
+  // Keep only the last 5 pages here for the LLM prompt
+  recentHistory: Translation[][];
+  translatedCount: number;
+}
+
+interface PageCache {
+  bboxes: Bbox[];
+  translations: Translation[];
+}

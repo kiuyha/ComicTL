@@ -18,6 +18,10 @@
     scaleY: number;
     originalSrc: string;
     wrapper: HTMLElement;
+    getTranslationCache: () => Promise<{
+      bboxes: Bbox[];
+      translatedSrc: string;
+    } | null>;
     requestBubbleDetection: () => Promise<Bbox[] | { error: string }>;
     requestTextTranslation: (
       bboxes: Bbox[],
@@ -34,6 +38,7 @@
     scaleY,
     originalSrc,
     wrapper,
+    getTranslationCache,
     requestBubbleDetection,
     requestTextTranslation,
     onClose,
@@ -132,7 +137,7 @@
     loadingMsg = "Please wait while we translate the text...";
     applyBboxesSort();
 
-    const translations = await requestTextTranslation(bboxes);
+    const translations = await requestTextTranslation($state.snapshot(bboxes));
     if (typeof translations === "object" && translations?.error) {
       mode = "refining";
       showError(translations.error);
@@ -186,7 +191,11 @@
   }
 
   onMount(async () => {
-    const rawBboxes = await requestBubbleDetection();
+    const initialCache = await getTranslationCache();
+
+    const rawBboxes = initialCache
+      ? initialCache.bboxes
+      : await requestBubbleDetection();
 
     if (!Array.isArray(rawBboxes)) {
       showError(rawBboxes?.error);
@@ -206,7 +215,8 @@
     }));
 
     applyBboxesSort();
-    mode = "refining";
+    mode = initialCache ? "results" : "refining";
+    translatedUrl = initialCache?.translatedSrc ?? "";
   });
 
   $effect(() => {

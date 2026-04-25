@@ -19,6 +19,12 @@
     Eye,
   } from "lucide-svelte";
 
+  let {
+    seriesName,
+  }: {
+    seriesName: string;
+  } = $props();
+
   let isFirstRun = $state(true);
   let activeTab = $state("home");
   let autoScan = $state(false);
@@ -35,12 +41,18 @@
   let autoUpdateModel = $state(true);
   let minConfidence = $state(0.5);
   let performanceOverlay = $state(false);
-  let seriesSummary = $state("");
-  let dictionaryStr = $state("");
+  let seriesContext = $state<SeriesContext>({
+    title: seriesName,
+    summary: "",
+    dictionary: "",
+    recentHistory: [],
+    translatedCount: 0,
+  });
   let currentMode = $state("local");
   let activeDevice = $state("cpu");
   let loadingSettings = $state(true);
   let hasApiKey = $derived(geminiKey.trim().length > 0);
+  let saveTimer: ReturnType<typeof setTimeout>;
 
   const tabs = [
     { id: "home", label: "Home", icon: Zap },
@@ -110,55 +122,93 @@
   }
 
   async function loadSettings() {
-    isFirstRun = (await storage.getItem("sync:is-first-run")) ?? isFirstRun;
-    shareData = (await storage.getItem("sync:share-data")) ?? shareData;
-    autoUpdateModel =
-      (await storage.getItem("sync:auto-update-model")) ?? autoUpdateModel;
-    minConfidence =
-      (await storage.getItem("sync:min-confidence")) ?? minConfidence;
-    performanceOverlay =
-      (await storage.getItem("sync:performance-overlay")) ?? performanceOverlay;
-    geminiKey = (await storage.getItem("sync:gemini-key")) ?? geminiKey;
-    geminiModel = (await storage.getItem("sync:gemini-model")) ?? geminiModel;
-    detectionModel =
-      (await storage.getItem("sync:detection-model")) ?? detectionModel;
-    currentMode = (await storage.getItem("sync:current-mode")) ?? currentMode;
+    const items = await storage.getItems([
+      "sync:is-first-run",
+      "sync:share-data",
+      "sync:auto-update-model",
+      "sync:min-confidence",
+      "sync:performance-overlay",
+      "sync:gemini-key",
+      "sync:gemini-model",
+      "sync:detection-model",
+      "sync:current-mode",
+      "local:active-device",
+      `sync:context-${seriesName}`,
+    ]);
 
-    activeDevice =
-      (await storage.getItem("local:active-device")) ?? activeDevice;
+    // Convert [{key: '...', value: '...'}, ...] into a simple lookup object
+    const saved = Object.fromEntries(items.map((i) => [i.key, i.value]));
+
+    isFirstRun = saved["sync:is-first-run"] ?? isFirstRun;
+    shareData = saved["sync:share-data"] ?? shareData;
+    autoUpdateModel = saved["sync:auto-update-model"] ?? autoUpdateModel;
+    minConfidence = saved["sync:min-confidence"] ?? minConfidence;
+    performanceOverlay =
+      saved["sync:performance-overlay"] ?? performanceOverlay;
+    geminiKey = saved["sync:gemini-key"] ?? geminiKey;
+    geminiModel = saved["sync:gemini-model"] ?? geminiModel;
+    detectionModel = saved["sync:detection-model"] ?? detectionModel;
+    currentMode = saved["sync:current-mode"] ?? currentMode;
+    activeDevice = saved["local:active-device"] ?? activeDevice;
+    const storedCtx = saved[`sync:context-${seriesName}`];
+    if (storedCtx) {
+      seriesContext = { ...seriesContext, ...storedCtx };
+    }
+
     loadingSettings = false;
   }
 
   loadSettings();
 
+  function debouncedSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      // Pass an array of key/value objects to setItems
+      storage.setItems([
+        { key: "sync:is-first-run", value: isFirstRun },
+        { key: "sync:share-data", value: shareData },
+        { key: "sync:auto-update-model", value: autoUpdateModel },
+        { key: "sync:min-confidence", value: minConfidence },
+        { key: "sync:performance-overlay", value: performanceOverlay },
+        { key: "sync:gemini-key", value: geminiKey },
+        { key: "sync:gemini-model", value: geminiModel },
+        { key: "sync:source-lang", value: sourceLang },
+        { key: "sync:target-lang", value: targetLang },
+        { key: "sync:detection-model", value: detectionModel },
+        { key: "sync:current-mode", value: currentMode },
+        { key: `sync:context-${seriesName}`, value: seriesContext },
+      ]);
+    }, 150);
+  }
+
   $effect(() => {
     if (!loadingSettings) {
-      storage.setItem("sync:is-first-run", isFirstRun);
-      storage.setItem("sync:share-data", shareData);
-      storage.setItem("sync:auto-update-model", autoUpdateModel);
-      storage.setItem("sync:min-confidence", minConfidence);
-      storage.setItem("sync:performance-overlay", performanceOverlay);
-      storage.setItem("sync:gemini-key", geminiKey);
-      storage.setItem("sync:gemini-model", geminiModel);
-      // storage.setItem("sync:auto-scan", autoScan);
-      storage.setItem("sync:source-lang", sourceLang);
-      storage.setItem("sync:target-lang", targetLang);
-      storage.setItem("sync:detection-model", detectionModel);
-      storage.setItem("sync:current-mode", currentMode);
-
-      storage.setItem("sync:series-summary", seriesSummary);
-      storage.setItem("sync:dictionary-str", dictionaryStr);
+      // touch all state to subscribe, then debounce the actual writes
+      [
+        isFirstRun,
+        shareData,
+        autoUpdateModel,
+        minConfidence,
+        performanceOverlay,
+        geminiKey,
+        geminiModel,
+        sourceLang,
+        targetLang,
+        detectionModel,
+        currentMode,
+        seriesContext.title,
+        seriesContext.summary,
+        seriesContext.dictionary,
+      ];
+  
+      debouncedSave();
     }
+  });
 
-    const handleClick = () => {
-      activeDropdown = null;
-    };
-
+  $effect(() => {
+    const handleClick = () => (activeDropdown = null);
     window.addEventListener("click", handleClick);
-
-    return () => {
-      window.removeEventListener("click", handleClick);
-    };
+    return () => window.removeEventListener("click", handleClick);
   });
 </script>
 
@@ -449,13 +499,28 @@
 
           <div class="flex flex-col grow space-y-1.5">
             <label
+              for="title"
+              class="text-xs font-bold uppercase tracking-widest text-zinc-500 ml-1"
+              >Series Title</label
+            >
+            <input
+              type="text"
+              id="title"
+              bind:value={seriesContext.title}
+              placeholder="e.g. One Piece"
+              class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+            />
+          </div>
+
+          <div class="flex flex-col grow space-y-1.5">
+            <label
               for="summary"
               class="text-xs font-bold uppercase tracking-widest text-zinc-500 ml-1"
               >Series Summary</label
             >
             <textarea
               id="summary"
-              bind:value={seriesSummary}
+              bind:value={seriesContext.summary}
               placeholder="e.g. Set in the Edo period, a ronin seeks..."
               class="w-full h-24 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none transition-all placeholder:text-zinc-400"
             ></textarea>
@@ -469,7 +534,7 @@
             >
             <textarea
               id="dict"
-              bind:value={dictionaryStr}
+              bind:value={seriesContext.dictionary}
               placeholder="Kuro -> 黒&#10;Oni -> Demon"
               class="w-full h-24 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none resize-none transition-all placeholder:text-zinc-400"
             ></textarea>
@@ -582,7 +647,7 @@
                   </button>
                 </div>
               </div>
-  
+
               <div class="space-y-1.5">
                 <label
                   for="gemini-model"

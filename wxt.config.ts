@@ -19,6 +19,7 @@ export default defineConfig({
       "offscreen",
       "storage",
       "contextMenus",
+      "unlimitedStorage",
     ],
     host_permissions: ["<all_urls>"],
     web_accessible_resources: [

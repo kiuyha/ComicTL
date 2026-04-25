@@ -30,8 +30,8 @@ export default defineBackground(() => {
       ensureOffscreen().then(async () => {
         // Config being pass in background because it's not available in offscreen
         const config = {
-          selectedModel:
-            (await storage.getItem<string>("sync:selected-model")) ??
+          detectionModel:
+            (await storage.getItem<string>("sync:detection-model")) ??
             "yolo26n",
           currentMode:
             (await storage.getItem<string>("sync:current-mode")) ?? "local",

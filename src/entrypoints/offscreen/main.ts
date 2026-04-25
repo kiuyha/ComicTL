@@ -1,12 +1,11 @@
 import { detectTextBubble } from "@/lib/detections";
 import { translateWithGemini } from "@/lib/gemini";
-import { repaintWithTranslations } from "@/lib/utils";
 
 browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
   if (msg.type === "OFFSCREEN_DETECT_BBOX") {
-    const { selectedModel, autoUpdateModel, minConfidence } = msg.config;
+    const { detectionModel, autoUpdateModel, minConfidence } = msg.config;
 
-    detectTextBubble(msg.data, minConfidence, selectedModel, autoUpdateModel).then(
+    detectTextBubble(msg.data, minConfidence, detectionModel, autoUpdateModel).then(
       sendResponse,
     ).catch((err) => sendResponse({ error : err.message }));
 
@@ -16,7 +15,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
   if (msg.type === "OFFSCREEN_TRANSLATE_IMAGE") {
     const { currentMode, targetLang, sourceLang, geminiKey, geminiModel } =
       msg.config;
-    const { src, bboxes } = msg.data;
+    const { src, bboxes, seriesContext } = msg.data;
 
     if (currentMode === "local") {
       throw new Error("Local mode not supported in offscreen");
@@ -27,11 +26,10 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         geminiKey,
         targetLang,
         sourceLang,
-        geminiModel,
+        seriesContext,
+        geminiModel
       )
-        .then((translations) =>
-          repaintWithTranslations(src, bboxes, translations).then(sendResponse),
-        )
+        .then(sendResponse)
         .catch((err) => sendResponse({ error: err.message }));
     }
 
