@@ -3,11 +3,12 @@
 A browser extension that translates manga pages in-place. Click a page, adjust the detected speech bubbles if needed, confirm, and the translated text gets painted directly onto the image.
 
 This is v0.1.0, cloud mode only. Local mode (no API key, fully on-device) is planned for v1.0.
+<img width="800" height="500" style="width: 100%;" alt="Demo_Optimized" src="https://github.com/user-attachments/assets/9aca9643-6a35-401e-8e4d-f28cf2f07b4c" />
 
-<video src="https://github.com/user-attachments/assets/b97b7118-0d26-4237-9b2e-0d9c273b91d7" autoplay loop muted width="100%"></video>
 ---
 
 ## How it works
+
 
 ```mermaid
 graph TD
