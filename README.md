@@ -4,6 +4,7 @@ A browser extension that translates manga pages in-place. Click a page, adjust t
 
 This is v0.1.0, cloud mode only. Local mode (no API key, fully on-device) is planned for v1.0.
 
+<video src="https://github.com/user-attachments/assets/b97b7118-0d26-4237-9b2e-0d9c273b91d7" autoplay loop muted width="100%"></video>
 ---
 
 ## How it works
