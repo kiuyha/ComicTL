@@ -35,7 +35,7 @@
   let showKey = $state(false);
   let geminiModel = $state("gemini-3.1-flash-lite-preview");
   let detectionModel = $state("yolo26n");
-  let sourceLang = $state("EN");
+  let sourceLang = $state("AUTO");
   let targetLang = $state("EN");
   let activeDropdown = $state<"source" | "target" | null>(null);
   let searchQuery = $state("");
@@ -97,29 +97,66 @@
   }
 
   let tabIndex = $derived(TABS.findIndex((t) => t.id === activeTab));
+  
   const languages: { code: string; name: string }[] = JSON.parse(
     import.meta.env.WXT_LANGUAGES ??
-      `[{"code": "EN", "name": "English"}, {"code": "ID", "name": "Indonesian"}, {"code": "JA", "name": "Japanese"}, {"code": "KO", "name": "Korean"}, {"code": "ZH", "name": "Chinese"}, {"code": "ES", "name": "Spanish"}]`,
+      `[
+        {"code": "AUTO", "name": "Auto-Detect"}, 
+        {"code": "EN", "name": "English"}, 
+        {"code": "JA", "name": "Japanese"}, 
+        {"code": "KO", "name": "Korean"}, 
+        {"code": "ZH", "name": "Chinese"}, 
+        {"code": "ID", "name": "Indonesian"}, 
+        {"code": "ES", "name": "Spanish"},
+        {"code": "FR", "name": "French"},
+        {"code": "VI", "name": "Vietnamese"},
+        {"code": "TL", "name": "Tagalog"}
+      ]`,
   );
+  
   const geminiModels = JSON.parse(
     import.meta.env.WXT_GEMINI_MODELS ||
-      '[{"id": "gemini-3.1-flash-lite-preview", "label": "Gemini 3.1 Flash Lite"}]',
+      "[" +
+        '{"id": "gemini-3.1-flash-lite-preview", "label": "Gemini 3.1 Flash Lite"},' +
+        '{"id": "gemini-3-flash", "label": "Gemini 3 Flash"},' +
+        '{"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash"},' +
+        '{"id": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash Lite"}' +
+      "]",
   );
+  
   const detectionModels = JSON.parse(
     import.meta.env.WXT_DETECTION_MODELS ||
       '[{"id": "yolo26n", "label": "YOLO26-Nano"}, {"id": "yolo26s", "label": "YOLO26-Small"}]',
   );
 
-  const filteredLanguages = $derived(
-    languages.filter((l) =>
-      l.name.toLowerCase().includes(searchQuery.toLowerCase()),
-    ),
+  const visibleLanguages = $derived(
+    languages.filter((l) => {
+      const matchesSearch = l.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const isTargetAuto = activeDropdown === "target" && l.code === "AUTO";
+      const isLocalAuto = activeDropdown === "source" && currentMode === "local" && l.code === "AUTO";
+      
+      return matchesSearch && !isTargetAuto && !isLocalAuto;
+    }),
   );
 
+  function setMode(modeId: string) {
+    currentMode = modeId;
+    if (modeId === "cloud") {
+      sourceLang = "AUTO";
+    } else if (modeId === "local" && sourceLang === "AUTO") {
+      sourceLang = "JA";
+    }
+  }
+
   function swapLanguages() {
-    const temp = sourceLang;
-    sourceLang = targetLang;
-    targetLang = temp;
+    if (sourceLang === "AUTO") {
+      sourceLang = targetLang;
+      targetLang = "EN";
+    } else {
+      const temp = sourceLang;
+      sourceLang = targetLang;
+      targetLang = temp;
+    }
   }
 
   function openDropdown(type: "source" | "target") {
@@ -143,13 +180,14 @@
       "sync:gemini-model",
       "sync:detection-model",
       "sync:current-mode",
+      "sync:source-lang",
+      "sync:target-lang",
       "local:active-device",
       `sync:context-${seriesName}`,
       "sync:text-font",
       "local:custom-fonts",
     ]);
 
-    // Convert [{key: '...', value: '...'}, ...] into a simple lookup object
     const saved = Object.fromEntries(items.map((i) => [i.key, i.value]));
 
     isFirstRun = saved["sync:is-first-run"] ?? isFirstRun;
@@ -160,6 +198,8 @@
     geminiModel = saved["sync:gemini-model"] ?? geminiModel;
     detectionModel = saved["sync:detection-model"] ?? detectionModel;
     currentMode = saved["sync:current-mode"] ?? currentMode;
+    sourceLang = saved["sync:source-lang"] ?? sourceLang;
+    targetLang = saved["sync:target-lang"] ?? targetLang;
     activeDevice = saved["local:active-device"] ?? activeDevice;
     textFont = saved["sync:text-font"] ?? textFont;
     customFonts = Array.isArray(saved["local:custom-fonts"])
@@ -178,7 +218,6 @@
   function debouncedSave() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      // Pass an array of key/value objects to setItems
       storage.setItems([
         { key: "sync:is-first-run", value: isFirstRun },
         { key: "sync:share-data", value: shareData },
@@ -410,7 +449,7 @@
                 {#each MODES as mode}
                   <button
                     disabled={mode.disable()}
-                    onclick={() => (currentMode = mode.id)}
+                    onclick={() => setMode(mode.id)}
                     class="cursor-pointer px-2 py-0.5 rounded-full font-bold disabled:cursor-not-allowed disabled:text-gray-500 {mode.classes} {currentMode ===
                     mode.id
                       ? mode.activeClasses
@@ -509,7 +548,7 @@
                   </div>
 
                   <div class="max-h-48 overflow-y-auto p-1">
-                    {#each filteredLanguages as lang}
+                    {#each visibleLanguages as lang}
                       <button
                         onclick={() => selectLanguage(lang.code)}
                         class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors
@@ -523,7 +562,7 @@
                       </button>
                     {/each}
 
-                    {#if filteredLanguages.length === 0}
+                    {#if visibleLanguages.length === 0}
                       <div class="px-3 py-4 text-center text-sm text-zinc-500">
                         No languages found
                       </div>
