@@ -99,7 +99,7 @@
   let tabIndex = $derived(TABS.findIndex((t) => t.id === activeTab));
   
   const languages: { code: string; name: string }[] = JSON.parse(
-    import.meta.env.WXT_LANGUAGES ??
+    import.meta.env.WXT_LANGUAGES ||
       `[
         {"code": "AUTO", "name": "Auto-Detect"}, 
         {"code": "EN", "name": "English"}, 
