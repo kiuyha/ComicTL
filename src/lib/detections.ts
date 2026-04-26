@@ -1,5 +1,10 @@
 import * as ort from "onnxruntime-web/all";
-import { getModel, scalingImage, restoreBoundingBox } from "./utils";
+import {
+  getModel,
+  scalingImage,
+  restoreBoundingBox,
+  containmentNMS,
+} from "./utils";
 
 ort.env.wasm.wasmPaths = browser.runtime.getURL("/");
 
@@ -11,7 +16,7 @@ export async function detectTextBubble(
   imageSrc: string,
   minConfidence: number = 0.5,
   requestedModel: string = "yolo26n",
-  autoUpdateModel: boolean = true
+  autoUpdateModel: boolean = true,
 ) {
   if (session && currentModelName !== requestedModel) {
     try {
@@ -29,7 +34,11 @@ export async function detectTextBubble(
   const { imageData, origWidth, origHeight } = await scalingImage(imageSrc);
 
   if (!session) {
-    session = await getModel(DETECTION_MODEL_REPO, DETECTION_MODEL_PATH, autoUpdateModel);
+    session = await getModel(
+      DETECTION_MODEL_REPO,
+      DETECTION_MODEL_PATH,
+      autoUpdateModel,
+    );
     currentModelName = requestedModel;
   }
 
@@ -94,7 +103,7 @@ export async function detectTextBubble(
       );
     }
 
-    return formattedDetections;
+    return containmentNMS(formattedDetections);
   } finally {
     isDetecting = false;
   }

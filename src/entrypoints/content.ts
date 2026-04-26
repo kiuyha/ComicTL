@@ -5,25 +5,37 @@ import { getAdapter } from "@/lib/adapters";
 import { repaintWithTranslations, sendBboxData } from "@/lib/utils";
 import "@/assets/app.css";
 
+const translatedSrcKey = (src: string) => src.slice(0, 100);
+
 export default defineContentScript({
   matches: ["<all_urls>"],
   cssInjectionMode: "ui",
 
   async main(ctx) {
     const translatedSrcMap = new Map<string, string>();
+    let lastRightClickedSrc: string | undefined = undefined;
     const overlays = new Map<
       string,
       { ui: ShadowRootContentScriptUi<any>; wrapper: HTMLElement }
     >();
 
+    document.addEventListener("contextmenu", (e) => {
+      const path = e.composedPath();
+      const img = path.find((el) => el instanceof HTMLImageElement) as
+        | HTMLImageElement
+        | undefined;
+      lastRightClickedSrc = img && translatedSrcKey(img.src);
+    });
+
     browser.runtime.onMessage.addListener((msg) => {
-      if (msg.type === "comictl-translate-image") {
+      if ((msg.type = "comictl-translate-image")) {
         const adapter = getAdapter();
         const seriesName = adapter.seriesName() ?? "Unknown Series";
         const chapterId = adapter.chapterId();
         const pageIndex = adapter.pageIndex();
         const translationKey = `page-cache-${seriesName}-${chapterId}-${pageIndex}`;
-        const originalSrc = translatedSrcMap.get(msg.data) ?? msg.data;
+        const clickedSrc = msg.data ?? lastRightClickedSrc;
+        const originalSrc = translatedSrcMap.get(clickedSrc) ?? clickedSrc;
 
         if (overlays.has(originalSrc)) {
           overlays
@@ -71,16 +83,19 @@ export default defineContentScript({
                   const cache = await storage.getItem<PageCache>(
                     `local:${translationKey}`,
                   );
-                  return cache
-                    ? {
-                        bboxes: cache.bboxes,
-                        translatedSrc: await repaintWithTranslations(
-                          originalSrc,
-                          cache.bboxes,
-                          cache.translations,
-                        ),
-                      }
-                    : null;
+                  if (cache) {
+                    const translatedSrc = await repaintWithTranslations(
+                      originalSrc,
+                      cache.bboxes,
+                      cache.translations,
+                    );
+                    translatedSrcMap.set(
+                      translatedSrcKey(translatedSrc),
+                      originalSrc,
+                    );
+                    return { bboxes: cache.bboxes, translatedSrc };
+                  }
+                  return;
                 },
 
                 // Sent img to detection model after init and return bounding boxes
@@ -91,11 +106,21 @@ export default defineContentScript({
                   }),
 
                 // Sent bounding box to translation model and return translated image
-                requestTextTranslation: async (bboxes: Bbox[], isManuallySorted: boolean) => {
+                requestTextTranslation: async (
+                  bboxes: Bbox[],
+                  isManuallySorted: boolean,
+                ) => {
                   // Share the bboxes information for future detection model
                   const shareData =
                     await storage.getItem<boolean>("sync:share-data");
-                  if (shareData && isManuallySorted) sendBboxData(seriesName, chapterId, pageIndex, bboxes, originalSrc);
+                  if (shareData && isManuallySorted)
+                    sendBboxData(
+                      seriesName,
+                      chapterId,
+                      pageIndex,
+                      bboxes,
+                      originalSrc,
+                    );
 
                   const resp = await browser.runtime.sendMessage({
                     type: "TRANSLATE_IMAGE",
@@ -148,7 +173,10 @@ export default defineContentScript({
                     bboxes,
                     translations,
                   );
-                  translatedSrcMap.set(translatedSrc, originalSrc);
+                  translatedSrcMap.set(
+                    translatedSrcKey(translatedSrc),
+                    originalSrc,
+                  );
 
                   return translatedSrc;
                 },
@@ -165,7 +193,11 @@ export default defineContentScript({
               unmount(app);
             }
             overlays.delete(originalSrc);
-            translatedSrcMap.delete(originalSrc);
+            for (const [key, value] of translatedSrcMap) {
+              if (value === originalSrc) {
+                translatedSrcMap.delete(key);
+              }
+            }
             if (imgElement.parentElement === wrapper) {
               wrapper.replaceWith(imgElement);
             }

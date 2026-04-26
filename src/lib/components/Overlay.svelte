@@ -21,7 +21,7 @@
     getTranslationCache: () => Promise<{
       bboxes: Bbox[];
       translatedSrc: string;
-    } | null>;
+    }|undefined>;
     requestBubbleDetection: () => Promise<Bbox[] | { error: string }>;
     requestTextTranslation: (
       bboxes: Bbox[],
@@ -321,6 +321,7 @@
     const handleBackToRefine = () => {
       if (mode === "results") {
         previousImageUrl = translatedUrl;
+        isManuallySorted = false;
         mode = "refining";
       }
     };
@@ -403,7 +404,8 @@
         class="relative bg-white shadow-lg rounded-lg p-2 flex gap-2 border border-gray-200"
       >
         <button
-          onclick={() => {
+          onclick={(e) => {
+            e.stopPropagation();
             if (previousImageUrl) {
               translatedUrl = previousImageUrl;
               previousImageUrl = "";

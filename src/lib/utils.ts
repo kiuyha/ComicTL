@@ -113,6 +113,33 @@ export function restoreBoundingBox(
   };
 }
 
+export function containmentNMS(detections: Bbox[], threshold = 0.85): Bbox[] {
+  // Sort by confidence descending so we keep the stronger box
+  const sorted = [...detections].sort((a, b) => b.confidence - a.confidence);
+  const keep: Bbox[] = [];
+
+  for (const box of sorted) {
+    const boxArea = (box.x2 - box.x1) * (box.y2 - box.y1);
+
+    const suppressed = keep.some((kept) => {
+      const ix1 = Math.max(box.x1, kept.x1);
+      const iy1 = Math.max(box.y1, kept.y1);
+      const ix2 = Math.min(box.x2, kept.x2);
+      const iy2 = Math.min(box.y2, kept.y2);
+
+      if (ix2 <= ix1 || iy2 <= iy1) return false;
+
+      const interArea = (ix2 - ix1) * (iy2 - iy1);
+      // What fraction of THIS box is covered by the kept box
+      return interArea / boxArea > threshold;
+    });
+
+    if (!suppressed) keep.push(box);
+  }
+
+  return keep;
+}
+
 export async function drawNumberedBboxes(
   imageSrc: string,
   bboxes: Bbox[],
