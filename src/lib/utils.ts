@@ -357,10 +357,11 @@ function drawFittedText(
   let fontSize = Math.min(maxFontSize, maxH);
   let lines: string[] = [];
 
-  while (fontSize >= 8) {
+  while (fontSize >= 4) {
     ctx.font = `600 ${fontSize}px ${fontStack}`;
     lines = wrapText(ctx, text, maxW);
-    if (lines.length * fontSize * 1.25 <= maxH) break;
+    const lineH = fontSize <= 6 ? fontSize * 1.1 : fontSize * 1.25;
+    if (lines.length * lineH <= maxH) break;
     fontSize--;
   }
 
@@ -413,8 +414,6 @@ export async function repaintWithTranslations(
       fontStack = "'Segoe UI', sans-serif";
     }
   }
-
-  console.log("Using font stack:", fontStack);
 
   const response = await fetch(imageSrc);
   const blob = await response.blob();

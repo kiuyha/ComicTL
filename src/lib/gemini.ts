@@ -1,5 +1,10 @@
 import { drawNumberedBboxes } from "./utils";
 
+interface TranslateResult {
+  translations: Translation[];
+  context?: { summary: string; dictionary: string };
+}
+
 export async function translateWithGemini(
   imageSrc: string,
   bboxes: Bbox[],
@@ -8,7 +13,7 @@ export async function translateWithGemini(
   sourceLang?: string,
   seriesContext?: SeriesContext,
   modelType = "gemini-3.1-flash-lite-preview",
-): Promise<Translation[]> {
+): Promise<TranslateResult> {
   const cleanBase64 = (await drawNumberedBboxes(imageSrc, bboxes)).replace(
     /^data:image\/(png|jpeg|webp);base64,/,
     "",
@@ -26,8 +31,7 @@ ${seriesContext?.dictionary ? `\nTerm dictionary (always use these): ${seriesCon
 ${seriesContext?.recentHistory?.length ? `\nPrevious pages for continuity:\n${seriesContext.recentHistory.map((h, i) => `Page -${seriesContext.recentHistory.length - i}: ${h.map((t) => t.text).join(" | ")}`).join("\n")}` : ""}
 ${
   needsContext
-    ? 
-`\nAlso infer from this page:
+    ? `\nAlso infer from this page:
   - A 1-2 sentence summary of the series tone, setting, and genre
   - Any character names or terms visible, as "Name -> Reading"`
     : ""
@@ -74,5 +78,32 @@ Output strictly as JSON:
 
   const data = await response.json();
   const resultText = data.candidates[0].content.parts[0].text;
-  return JSON.parse(resultText);
+  const raw = JSON.parse(resultText);
+
+  const translations: Translation[] = [];
+
+  if (Array.isArray(raw.translations)) {
+    for (const item of raw.translations) {
+      if (item.box !== undefined && item.text !== undefined) {
+        translations.push({ box: String(item.box), text: item.text });
+        continue;
+      }
+      for (const [key, value] of Object.entries(item)) {
+        const match = key.match(/box[_\-]?(\d+)/i);
+        if (match) {
+          translations.push({ box: match[1], text: String(value) });
+        }
+      }
+    }
+  } else if (typeof raw.translations === "object") {
+    for (const [key, value] of Object.entries(raw.translations)) {
+      const num = key.replace(/\D/g, "");
+      if (num) translations.push({ box: num, text: String(value) });
+    }
+  }
+
+  return {
+    translations,
+    context: raw?.context,
+  };
 }
