@@ -196,7 +196,7 @@ export default defineContentScript({
 
 async function updateSeriesContext(
   seriesName: string,
-  translations: Translation[],
+  translations: Translations,
   context?: { summary?: string; dictionary?: string },
 ) {
   const stored = (await storage.getItem<SeriesContext>(

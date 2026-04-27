@@ -419,7 +419,7 @@ function drawFittedText(
 export async function repaintWithTranslations(
   imageSrc: string,
   bboxes: Bbox[],
-  translations: Translation[],
+  translations: Translations,
 ): Promise<string> {
   const selectedFont =
     (await storage.getItem<string>("sync:text-font")) ?? "Segoe UI";
@@ -459,11 +459,8 @@ export async function repaintWithTranslations(
   for (const bbox of bboxes) inpaintBbox(imgData, bbox);
   ctx.putImageData(imgData, 0, 0);
 
-  // Map "1"-indexed box numbers to text
-  const byBox = new Map(translations.map((t) => [t.box, t.text]));
-
   bboxes.forEach((bbox, i) => {
-    const text = byBox.get(String(i + 1));
+    const text = translations[i];
     if (text) drawFittedText(ctx, text, bbox, fontStack);
   });
 

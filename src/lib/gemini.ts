@@ -1,7 +1,7 @@
 import { drawNumberedBboxes } from "./utils";
 
 interface TranslateResult {
-  translations: Translation[];
+  translations: Translations;
   context?: { summary: string; dictionary: string };
 }
 
@@ -24,11 +24,11 @@ export async function translateWithGemini(
     (seriesContext?.translatedCount ?? 0) % 5 === 0;
 
   const prompt = `You are a professional manga translator${seriesContext?.title ? ` working on "${seriesContext.title}"` : ""}.
-Translate the text in the numbered red boxes${sourceLang ? ` from ${sourceLang}` : ""} into ${targetLang}.
+Translate the text in the numbered red boxes${sourceLang !== "AUTO" ? ` from ${sourceLang}` : ""} into ${targetLang}.
 Maintain the tone and context of the scene.
 ${seriesContext?.summary ? `\nSeries context: ${seriesContext.summary}` : ""}
 ${seriesContext?.dictionary ? `\nTerm dictionary (always use these): ${seriesContext.dictionary}` : ""}
-${seriesContext?.recentHistory?.length ? `\nPrevious pages for continuity:\n${seriesContext.recentHistory.map((h, i) => `Page -${seriesContext.recentHistory.length - i}: ${h.map((t) => t.text).join(" | ")}`).join("\n")}` : ""}
+${seriesContext?.recentHistory?.length ? `\nPrevious pages for continuity:\n${seriesContext.recentHistory.map((h, i) => `Page -${seriesContext.recentHistory.length - i}: ${h.join(" | ")}`).join("\n")}` : ""}
 ${
   needsContext
     ? `\nAlso infer from this page:
@@ -36,10 +36,13 @@ ${
   - Any character names or terms visible, as "Name -> Reading"`
     : ""
 }
-Output strictly as JSON:
+Output strictly as valid JSON matching this structure:
 {
-  "translations": [{"box": "1", "text": "..."}],
- ${needsContext ? `"context": { "summary": "...", "dictionary": "..."` : ""}
+  "translations": ["translation 1", "translation 2"]${
+    needsContext
+      ? `,\n  "context": {\n    "summary": "...",\n    "dictionary": "..."\n  }`
+      : ""
+  }
 }`;
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelType}:generateContent?key=${apiKey}`;
@@ -78,32 +81,6 @@ Output strictly as JSON:
 
   const data = await response.json();
   const resultText = data.candidates[0].content.parts[0].text;
-  const raw = JSON.parse(resultText);
 
-  const translations: Translation[] = [];
-
-  if (Array.isArray(raw.translations)) {
-    for (const item of raw.translations) {
-      if (item.box !== undefined && item.text !== undefined) {
-        translations.push({ box: String(item.box), text: item.text });
-        continue;
-      }
-      for (const [key, value] of Object.entries(item)) {
-        const match = key.match(/box[_\-]?(\d+)/i);
-        if (match) {
-          translations.push({ box: match[1], text: String(value) });
-        }
-      }
-    }
-  } else if (typeof raw.translations === "object") {
-    for (const [key, value] of Object.entries(raw.translations)) {
-      const num = key.replace(/\D/g, "");
-      if (num) translations.push({ box: num, text: String(value) });
-    }
-  }
-
-  return {
-    translations,
-    context: raw?.context,
-  };
+  return JSON.parse(resultText);
 }

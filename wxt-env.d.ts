@@ -13,21 +13,18 @@ interface Bbox {
   confidence: number;
 }
 
-interface Translation {
-  box: string;
-  text: string;
-}
+type Translations = string[]; 
 
 interface SeriesContext {
   title: string;
   summary: string;
   dictionary: string;
   // Keep only the last 5 pages here for the LLM prompt
-  recentHistory: Translation[][];
+  recentHistory: Translations[];
   translatedCount: number;
 }
 
 interface PageCache {
   bboxes: Bbox[];
-  translations: Translation[];
+  translations: Translations;
 }
