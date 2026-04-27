@@ -2,8 +2,8 @@
 
 A browser extension that translates manga pages in-place. Click a page, adjust the detected speech bubbles if needed, confirm, and the translated text gets painted directly onto the image.
 
-This is v0.1.0, cloud mode only. Local mode (no API key, fully on-device) is planned for v1.0.
-<img width="800" height="500" style="width: 100%;" alt="Demo_Optimized" src="https://github.com/user-attachments/assets/9aca9643-6a35-401e-8e4d-f28cf2f07b4c" />
+This is cloud mode only. Local mode (no API key, fully on-device) is planned for v1.0.
+<img width="800" height="500" style="width: 100%;" alt="Demo" src="https://github.com/user-attachments/assets/9aca9643-6a35-401e-8e4d-f28cf2f07b4c" />
 
 ---
 
@@ -38,11 +38,11 @@ No account needed. No login. Just a Gemini API key.
 
 ## Installation
 
-Go to the [v0.1.0 release page](https://github.com/kiuyha/ComicTL/releases/tag/v0.1.0) and download the zip for your browser. No account or login is required to use the extension.
+Go to the [latest release page](https://github.com/kiuyha/ComicTL/releases/latest) and download the zip for your browser. No account or login is required to use the extension.
 
 ### Chrome
 
-1. Download `comic-tl-0.0.1-chrome.zip` and unzip it anywhere on your machine
+1. Download `comic-tl-<version>-chrome.zip` and unzip it anywhere on your machine
 2. Open Chrome and go to `chrome://extensions`
 3. Enable **Developer mode** using the toggle in the top right
 4. Click **Load unpacked** and select the unzipped folder
@@ -50,7 +50,7 @@ Go to the [v0.1.0 release page](https://github.com/kiuyha/ComicTL/releases/tag/v
 
 ### Firefox
 
-1. Download `comic-tl-0.0.1-firefox.zip` and unzip it anywhere on your machine
+1. Download `comic-tl-<version>-firefox.zip` and unzip it anywhere on your machine
 2. Open Firefox and go to `about:debugging#/runtime/this-firefox`
 3. Click **Load Temporary Add-on**
 4. Select any file inside the unzipped folder

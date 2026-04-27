@@ -115,7 +115,10 @@ export function restoreBoundingBox(
 
 export function containmentNMS(detections: Bbox[], threshold = 0.85): Bbox[] {
   // Sort by confidence descending so we keep the stronger box
-  const sorted = [...detections].sort((a, b) => b.confidence - a.confidence);
+  const sorted = [...detections].sort(
+    (a, b) =>
+      (a.confidence && b.confidence && b.confidence - a.confidence) || 0,
+  );
   const keep: Bbox[] = [];
 
   for (const box of sorted) {
@@ -369,7 +372,7 @@ function wrapText(
  * Shrinks font until the wrapped text fits inside the bbox, then draws it centered.
  */
 
-function drawFittedText(
+async function drawFittedText(
   ctx: CanvasRenderingContext2D,
   text: string,
   bbox: Bbox,
@@ -380,6 +383,13 @@ function drawFittedText(
   const maxW = bbox.x2 - bbox.x1 - pad * 2;
   const maxH = bbox.y2 - bbox.y1 - pad * 2;
   if (maxW <= 0 || maxH <= 0) return;
+
+  // Force the font to load into memory BEFORE measuring.
+  try {
+    await document.fonts.load(`600 16px ${fontStack}`);
+  } catch (error) {
+    console.warn("ComicTL: Failed to load custom font, falling back.", error);
+  }
 
   let fontSize = Math.min(maxFontSize, maxH);
   let lines: string[] = [];
@@ -414,7 +424,7 @@ function drawFittedText(
 
 /**
  * Inpaints bboxes on a manga image then renders translated text into each one.
- * Returns an object URL (more efficient than base64 for display).
+ * Returns an base64-encoded image since blob from ext can't be dispayed.
  */
 export async function repaintWithTranslations(
   imageSrc: string,
@@ -459,10 +469,12 @@ export async function repaintWithTranslations(
   for (const bbox of bboxes) inpaintBbox(imgData, bbox);
   ctx.putImageData(imgData, 0, 0);
 
-  bboxes.forEach((bbox, i) => {
+  for (let i = 0; i < bboxes.length; i++) {
     const text = translations[i];
-    if (text) drawFittedText(ctx, text, bbox, fontStack);
-  });
+    if (text) {
+      await drawFittedText(ctx, text, bboxes[i], fontStack);
+    }
+  }
 
   return canvas.toDataURL("image/png");
 }

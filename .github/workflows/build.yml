@@ -41,6 +41,7 @@ jobs:
           WXT_LANGUAGES: ${{ secrets.WXT_LANGUAGES }}
           WXT_GEMINI_MODELS: ${{ secrets.WXT_GEMINI_MODELS }}
           WXT_DETECTION_MODELS: ${{ secrets.WXT_DETECTION_MODELS }}
+          WXT_LATEST_RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/latest
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

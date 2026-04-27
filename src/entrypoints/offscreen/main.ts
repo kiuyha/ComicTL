@@ -1,5 +1,6 @@
 import { detectTextBubble } from "@/lib/detections";
 import { translateWithGemini } from "@/lib/gemini";
+import '@/assets/app.css';
 
 browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
   if (msg.type === "OFFSCREEN_DETECT_BBOX") {

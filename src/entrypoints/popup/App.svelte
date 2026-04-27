@@ -3,7 +3,7 @@
   import {
     Zap,
     BookOpen,
-    Settings as SettingsIcon,
+    SettingsIcon,
     ShieldCheck,
     Cpu,
     Info,
@@ -19,6 +19,7 @@
     Eye,
     Upload,
     X,
+    TriangleAlert,
   } from "lucide-svelte";
 
   let {
@@ -58,6 +59,15 @@
   let customFonts = $state<{ name: string; dataUrl: string }[]>([]);
   let fontUploading = $state(false);
   let isDraggingOver = $state(false);
+  let latestVersion = $state<{
+    currentVersion: string;
+    version: string;
+    url: string;
+  }>({
+    currentVersion: browser.runtime.getManifest().version,
+    version: "",
+    url: "",
+  });
 
   const BUNDLED_FONTS = [
     { id: "system", label: "System", stack: "'Segoe UI', sans-serif" },
@@ -97,7 +107,7 @@
   }
 
   let tabIndex = $derived(TABS.findIndex((t) => t.id === activeTab));
-  
+
   const languages: { code: string; name: string }[] = JSON.parse(
     import.meta.env.WXT_LANGUAGES ||
       `[
@@ -113,7 +123,7 @@
         {"code": "TL", "name": "Tagalog"}
       ]`,
   );
-  
+
   const geminiModels = JSON.parse(
     import.meta.env.WXT_GEMINI_MODELS ||
       "[" +
@@ -121,9 +131,9 @@
         '{"id": "gemini-3-flash", "label": "Gemini 3 Flash"},' +
         '{"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash"},' +
         '{"id": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash Lite"}' +
-      "]",
+        "]",
   );
-  
+
   const detectionModels = JSON.parse(
     import.meta.env.WXT_DETECTION_MODELS ||
       '[{"id": "yolo26n", "label": "YOLO26-Nano"}, {"id": "yolo26s", "label": "YOLO26-Small"}]',
@@ -131,10 +141,15 @@
 
   const visibleLanguages = $derived(
     languages.filter((l) => {
-      const matchesSearch = l.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = l.name
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
       const isTargetAuto = activeDropdown === "target" && l.code === "AUTO";
-      const isLocalAuto = activeDropdown === "source" && currentMode === "local" && l.code === "AUTO";
-      
+      const isLocalAuto =
+        activeDropdown === "source" &&
+        currentMode === "local" &&
+        l.code === "AUTO";
+
       return matchesSearch && !isTargetAuto && !isLocalAuto;
     }),
   );
@@ -314,6 +329,34 @@
       }
     });
   });
+
+  $effect(() => {
+    (async () => {
+      try {
+        const res = await fetch(import.meta.env.WXT_LATEST_RELEASE_URL, {
+          method: "HEAD",
+        });
+
+        // fetch follows redirects automatically
+        const finalUrl = res.url;
+        const tag = finalUrl.split("/").pop(); // "v0.2.3"
+
+        if (!tag) return;
+
+        // Strip the "v" so it matches Chrome's manifest format
+        const fetchedVersion = tag.replace(/^v/, "");
+        if (fetchedVersion !== latestVersion.currentVersion) {
+          latestVersion = {
+            currentVersion: latestVersion.currentVersion,
+            version: fetchedVersion,
+            url: finalUrl,
+          };
+        }
+      } catch (error) {
+        console.error("ComicTL: Failed to check for updates", error);
+      }
+    })();
+  });
 </script>
 
 <main
@@ -412,6 +455,31 @@
       {/each}
     </div>
 
+    {#if latestVersion?.version && latestVersion.version !== latestVersion.currentVersion}
+      <div
+        class="flex items-center gap-3 p-3.5 mb-6 text-sm bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-200 rounded-xl"
+      >
+        <TriangleAlert
+          size={25}
+          class="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400"
+        />
+        <p class="leading-relaxed">
+          <strong class="font-semibold text-amber-900 dark:text-amber-100"
+            >Update Available:</strong
+          >
+          Version {latestVersion.version} is out.
+          <a
+            href={latestVersion.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="font-medium underline decoration-amber-400/50 hover:decoration-amber-500 dark:hover:decoration-amber-300 transition-colors"
+          >
+            Download from GitHub
+          </a>
+        </p>
+      </div>
+    {/if}
+
     <div class="grow grid">
       {#if activeTab === "home"}
         <div
@@ -465,14 +533,15 @@
               <div class="flex gap-2 text-amber-600 dark:text-amber-500">
                 <Info size={14} class="shrink-0 mt-0.5" />
                 <p class="text-xs leading-relaxed">
-                  Local mode active. OCR and translation will run on your {activeDevice.toUpperCase()}.
+                  Local mode active. Detection and translation will run on your {activeDevice.toUpperCase()}.
                 </p>
               </div>
             {:else if currentMode === "cloud"}
               <div class="flex gap-2 text-emerald-600 dark:text-emerald-500">
                 <Sparkles size={14} class="shrink-0 mt-0.5" />
                 <p class="text-xs leading-relaxed">
-                  Cloud mode active. Using Gemini API for improved accuracy.
+                  Cloud mode active. Using Gemini API for improved translation.
+                  Detection run on your {activeDevice.toUpperCase()}.
                 </p>
               </div>
             {/if}
@@ -887,7 +956,7 @@
             >
               <span
                 class="text-sm font-medium group-hover:text-blue-500 transition-colors"
-                >Data Sharing</span
+                >Allow anonymous data sharing</span
               >
               <div class="relative flex items-center">
                 <input
@@ -904,6 +973,14 @@
                 />
               </div>
             </label>
+          </div>
+
+          <div class="text-center">
+            <span
+              class="text-xs font-bold tracking-wide text-zinc-500 dark:text-zinc-400"
+            >
+              ComicTL v{latestVersion.currentVersion}
+            </span>
           </div>
         </div>
       {/if}

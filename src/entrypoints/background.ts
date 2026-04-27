@@ -1,22 +1,30 @@
 export default defineBackground(() => {
   // Make Context menu (Popup shows on right click)
-  browser.runtime.onInstalled.addListener(() => {
+  browser.runtime.onInstalled.addListener(async (details) => {
     browser.contextMenus.removeAll();
-
     browser.contextMenus.create({
       id: "comictl-translate-image",
       title: "Translate Image",
       contexts: ["image"],
     });
 
-    detectHardware();
+    await storage.setItem("local:active-device", await detectHardware());
   });
 
   // Send message when context menu is clicked
-  browser.contextMenus.onClicked.addListener((info, tab) => {
+  browser.contextMenus.onClicked.addListener(async (info, tab) => {
     if (!tab?.id) return;
 
     if (info.menuItemId === "comictl-translate-image") {
+
+      // Show popup if user not yet set up the extension
+      if (await storage.getItem("sync:is-first-run", { fallback: true })) {
+        browser.action
+          .openPopup({ windowId: tab?.windowId })
+          .catch(console.error);
+        return;
+      }
+
       browser.tabs.sendMessage(tab.id, {
         type: info.menuItemId,
         data: info.srcUrl,
@@ -35,13 +43,11 @@ export default defineBackground(() => {
             "yolo26n",
           currentMode:
             (await storage.getItem<string>("sync:current-mode")) ?? "local",
-          sourceLang:
-            (await storage.getItem<string>("sync:source-lang")),
+          sourceLang: await storage.getItem<string>("sync:source-lang"),
           targetLang:
             (await storage.getItem<string>("sync:target-lang")) ?? "EN",
           geminiKey: (await storage.getItem<string>("sync:gemini-key")) ?? "",
-          geminiModel:
-            (await storage.getItem<string>("sync:gemini-model")),
+          geminiModel: await storage.getItem<string>("sync:gemini-model"),
           autoUpdateModel:
             (await storage.getItem<boolean>("sync:auto-update-model")) ?? true,
           minConfidence:
@@ -73,31 +79,29 @@ async function ensureOffscreen() {
 }
 
 async function detectHardware() {
-  let activeDevice = "cpu";
-
   if ("ml" in navigator) {
     try {
       const mlContext = await (navigator.ml as any).createContext({
         deviceType: "npu",
       });
       if (mlContext) {
-        activeDevice = "npu";
+        return "npu";
       }
     } catch (error) {
       console.warn("WebNN NPU not available or context creation failed.");
     }
   }
 
-  if (activeDevice === "cpu" && "gpu" in navigator) {
+  if ("gpu" in navigator) {
     try {
       const adapter = await navigator.gpu.requestAdapter();
       if (adapter) {
-        activeDevice = "gpu";
+        return "gpu";
       }
     } catch (error) {
       console.warn("GPU adapter request failed.");
     }
   }
 
-  await storage.setItem("local:active-device", activeDevice);
+  return "cpu";
 }
