@@ -60,7 +60,8 @@ export default defineContentScript({
       const seriesName = adapter.seriesName() ?? "Unknown Series";
       const chapterId = adapter.chapterId();
       const pageIndex = adapter.pageIndex();
-      const translationKey = `page-cache-${seriesName}-${chapterId}-${pageIndex}`;
+      const translationKey = async () =>
+        `page-cache-${await storage.getItem<string>("sync:target-lang")}-${seriesName}-${chapterId}-${pageIndex}`;
 
       const rect = imgElement.getBoundingClientRect();
       const scaleX = rect.width / imgElement.naturalWidth;
@@ -94,7 +95,7 @@ export default defineContentScript({
 
               getTranslationCache: async () => {
                 const cache = await storage.getItem<PageCache>(
-                  `local:${translationKey}`,
+                  `local:${await translationKey()}`,
                 );
                 if (!cache) return;
                 const translatedSrc = await repaintWithTranslations(
@@ -127,14 +128,29 @@ export default defineContentScript({
                     originalSrc,
                   );
 
+                let seriesContext = await storage.getItem<SeriesContext>(
+                  `sync:context-${seriesName}`,
+                );
+
+                // Perform the continuity check
+                if (seriesContext) {
+                  const isContinuous =
+                    seriesContext.lastChapterId === chapterId &&
+                    seriesContext.lastPageIndex !== null &&
+                    pageIndex === seriesContext.lastPageIndex + 1;
+
+                  // If they jumped chapters or skipped pages, wipe the history in memory
+                  if (!isContinuous) {
+                    seriesContext.recentHistory = [];
+                  }
+                }
+
                 const resp = await browser.runtime.sendMessage({
                   type: "TRANSLATE_IMAGE",
                   data: {
                     src: originalSrc,
                     bboxes,
-                    seriesContext: await storage.getItem<SeriesContext>(
-                      `sync:context-${seriesName}`,
-                    ),
+                    seriesContext,
                   },
                 });
 
@@ -142,11 +158,21 @@ export default defineContentScript({
 
                 const { translations, context } = resp;
 
-                await storage.setItem<PageCache>(`local:${translationKey}`, {
-                  bboxes,
+                await storage.setItem<PageCache>(
+                  `local:${await translationKey()}`,
+                  {
+                    bboxes,
+                    translations,
+                  },
+                );
+                await updateSeriesContext(
+                  seriesContext,
+                  seriesName,
+                  chapterId,
+                  pageIndex,
                   translations,
-                });
-                await updateSeriesContext(seriesName, translations, context);
+                  context,
+                );
 
                 const translatedSrc = await repaintWithTranslations(
                   originalSrc,
@@ -195,25 +221,40 @@ export default defineContentScript({
 });
 
 async function updateSeriesContext(
+  cleanContext: SeriesContext | null,
   seriesName: string,
+  chapterId: string,
+  pageIndex: number,
   translations: Translations,
   context?: { summary?: string; dictionary?: string },
 ) {
-  const stored = (await storage.getItem<SeriesContext>(
-    `sync:context-${seriesName}`,
-  )) ?? {
+  // If no context existed at all, build a fresh one
+  const stored = cleanContext ?? {
+    seriesName: seriesName,
     summary: "",
     dictionary: "",
-    translatedCount: 0,
+    lastChapterId: null,
+    lastPageIndex: null,
     recentHistory: [],
+    translatedCount: 0,
   };
 
+  // Update summary/dictionary if provided
   if (context) {
     stored.summary = context.summary ?? stored.summary;
     stored.dictionary = context.dictionary ?? stored.dictionary;
   }
+
   stored.translatedCount += 1;
-  stored.recentHistory = [...stored.recentHistory.slice(-4), translations];
+  stored.lastChapterId = chapterId;
+  stored.lastPageIndex = pageIndex;
+
+  // Push the new history object into the buffer
+  const formattedText = translations.join(" | ");
+  stored.recentHistory = [
+    ...stored.recentHistory.slice(-4),
+    { chapterId, pageIndex, text: formattedText },
+  ];
 
   await storage.setItem(`sync:context-${seriesName}`, stored);
 }

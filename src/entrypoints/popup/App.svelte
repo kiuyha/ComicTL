@@ -36,17 +36,19 @@
   let showKey = $state(false);
   let geminiModel = $state("gemini-3.1-flash-lite-preview");
   let detectionModel = $state("yolo26n");
-  let sourceLang = $state("AUTO");
-  let targetLang = $state("EN");
+  let sourceLang = $state("Auto-Detect");
+  let targetLang = $state("English");
   let activeDropdown = $state<"source" | "target" | null>(null);
   let searchQuery = $state("");
 
   let autoUpdateModel = $state(true);
   let minConfidence = $state(0.5);
   let seriesContext = $state<SeriesContext>({
-    title: seriesName,
+    seriesName,
     summary: "",
     dictionary: "",
+    lastChapterId: null,
+    lastPageIndex: null,
     recentHistory: [],
     translatedCount: 0,
   });
@@ -108,20 +110,28 @@
 
   let tabIndex = $derived(TABS.findIndex((t) => t.id === activeTab));
 
-  const languages: { code: string; name: string }[] = JSON.parse(
+  const languages: string[] = JSON.parse(
     import.meta.env.WXT_LANGUAGES ||
       `[
-        {"code": "AUTO", "name": "Auto-Detect"}, 
-        {"code": "EN", "name": "English"}, 
-        {"code": "JA", "name": "Japanese"}, 
-        {"code": "KO", "name": "Korean"}, 
-        {"code": "ZH", "name": "Chinese"}, 
-        {"code": "ID", "name": "Indonesian"}, 
-        {"code": "ES", "name": "Spanish"},
-        {"code": "FR", "name": "French"},
-        {"code": "VI", "name": "Vietnamese"},
-        {"code": "TL", "name": "Tagalog"}
-      ]`,
+      "Auto-Detect",
+      "English",
+      "Japanese",
+      "Korean",
+      "Chinese (Simplified)",
+      "Chinese (Traditional)",
+      "Indonesian",
+      "Spanish",
+      "Portuguese",
+      "French",
+      "Vietnamese",
+      "Tagalog",
+      "Malay",
+      "Thai",
+      "Russian",
+      "Arabic",
+      "German",
+      "Italian"
+    ]`,
   );
 
   const geminiModels = JSON.parse(
@@ -141,16 +151,9 @@
 
   const visibleLanguages = $derived(
     languages.filter((l) => {
-      const matchesSearch = l.name
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase());
-      const isTargetAuto = activeDropdown === "target" && l.code === "AUTO";
-      const isLocalAuto =
-        activeDropdown === "source" &&
-        currentMode === "local" &&
-        l.code === "AUTO";
-
-      return matchesSearch && !isTargetAuto && !isLocalAuto;
+      const matchesSearch = l.toLowerCase().includes(searchQuery.toLowerCase());
+      const isTargetAuto = activeDropdown === "target" && l === "Auto-Detect";
+      return matchesSearch && !isTargetAuto;
     }),
   );
 
@@ -179,9 +182,9 @@
     searchQuery = "";
   }
 
-  function selectLanguage(code: string) {
-    if (activeDropdown === "source") sourceLang = code;
-    if (activeDropdown === "target") targetLang = code;
+  function selectLanguage(lang: string) {
+    if (activeDropdown === "source") sourceLang = lang;
+    if (activeDropdown === "target") targetLang = lang;
     activeDropdown = null;
   }
 
@@ -268,7 +271,7 @@
         targetLang,
         detectionModel,
         currentMode,
-        seriesContext.title,
+        seriesContext.seriesName,
         seriesContext.summary,
         seriesContext.dictionary,
         textFont,
@@ -578,7 +581,7 @@
                 onclick={() => openDropdown("source")}
                 class="flex-1 flex items-center justify-center gap-2 p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors text-sm font-semibold"
               >
-                {languages.find((l) => l.code === sourceLang)?.name}
+                {sourceLang}
                 <ChevronDown size={14} class="opacity-50" />
               </button>
 
@@ -594,7 +597,7 @@
                 onclick={() => openDropdown("target")}
                 class="flex-1 flex items-center justify-center gap-2 p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors text-sm font-semibold text-blue-500"
               >
-                {languages.find((l) => l.code === targetLang)?.name}
+                {targetLang}
                 <ChevronDown size={14} class="opacity-50" />
               </button>
 
@@ -619,15 +622,15 @@
                   <div class="max-h-48 overflow-y-auto p-1">
                     {#each visibleLanguages as lang}
                       <button
-                        onclick={() => selectLanguage(lang.code)}
+                        onclick={() => selectLanguage(lang)}
                         class="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors
                       {(activeDropdown === 'source'
                           ? sourceLang
-                          : targetLang) === lang.code
+                          : targetLang) === lang
                           ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 font-bold'
                           : ''}"
                       >
-                        {lang.name}
+                        {lang}
                       </button>
                     {/each}
 
@@ -679,7 +682,7 @@
             <input
               type="text"
               id="title"
-              bind:value={seriesContext.title}
+              bind:value={seriesContext.seriesName}
               placeholder="e.g. One Piece"
               class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
             />

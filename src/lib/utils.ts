@@ -25,7 +25,7 @@ async function fetchAsBase64(url: string) {
 export async function getModel(
   repoID: string,
   modelPath: string,
-  autoUpdateModel: boolean,
+  autoUpdateModel?: boolean,
 ) {
   const url = `https://huggingface.co/${repoID}/resolve/main/${modelPath}`;
   const cache = await caches.open(repoID);

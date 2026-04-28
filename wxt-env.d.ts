@@ -16,11 +16,20 @@ interface Bbox {
 type Translations = string[]; 
 
 interface SeriesContext {
-  title: string;
+  seriesName: string;
   summary: string;
   dictionary: string;
-  // Keep only the last 5 pages here for the LLM prompt
-  recentHistory: Translations[];
+  
+  // Tracking the last translated position
+  lastChapterId: string | null;
+  lastPageIndex: number | null;
+
+  recentHistory: {
+    chapterId: string;
+    pageIndex: number;
+    text: string;
+  }[];
+
   translatedCount: number;
 }
 

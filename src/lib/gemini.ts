@@ -10,7 +10,7 @@ export async function translateWithGemini(
   bboxes: Bbox[],
   apiKey: string,
   targetLang: string,
-  sourceLang?: string,
+  sourceLang: string,
   seriesContext?: SeriesContext,
   modelType = "gemini-3.1-flash-lite-preview",
 ): Promise<TranslateResult> {
@@ -23,22 +23,30 @@ export async function translateWithGemini(
     !seriesContext?.dictionary ||
     (seriesContext?.translatedCount ?? 0) % 5 === 0;
 
-  const prompt = `You are a professional manga translator${seriesContext?.title ? ` working on "${seriesContext.title}"` : ""}.
-Translate the text in the numbered red boxes${sourceLang !== "AUTO" ? ` from ${sourceLang}` : ""} into ${targetLang}.
+  const prompt = `You are a professional manga translator${seriesContext?.seriesName ? ` working on "${seriesContext.seriesName}"` : ""}.
+Translate the text in the numbered bounding boxes in the provided image${sourceLang !== "Auto-Detect" ? ` FROM ${sourceLang.toUpperCase()}` : ""} INTO ${targetLang.toUpperCase()}.
 Maintain the tone and context of the scene.
 ${seriesContext?.summary ? `\nSeries context: ${seriesContext.summary}` : ""}
 ${seriesContext?.dictionary ? `\nTerm dictionary (always use these): ${seriesContext.dictionary}` : ""}
-${seriesContext?.recentHistory?.length ? `\nPrevious pages for continuity:\n${seriesContext.recentHistory.map((h, i) => `Page -${seriesContext.recentHistory.length - i}: ${h.join(" | ")}`).join("\n")}` : ""}
+${seriesContext?.recentHistory?.length ? `\nPrevious pages for continuity:\n${seriesContext.recentHistory.map((h, i) => `Page -${seriesContext.recentHistory.length - i}: ${h.text}`).join("\n")}` : ""}
+
+--- CURRENT PAGE TRANSLATION ---
+Please process the dialogue boxes found in the provided image.
 ${
   needsContext
     ? `\nAlso infer from this page:
-  - A 1-2 sentence summary of the series tone, setting, and genre
-  - Any character names or terms visible, as "Name -> Reading"`
+1. A 1-2 sentence summary of the series tone, setting, and genre IN ENGLISH.
+2. Any character names, places, or unique terms visible, formatted as "Original Term -> English Translation". If no specific terms are visible, output strictly "None". Do not explain or write sentences.`
     : ""
 }
-Output strictly as valid JSON matching this structure:
+
+CRITICAL LANGUAGE INSTRUCTIONS:
+1. The dialogue inside the "translations" array MUST be strictly in ${targetLang.toUpperCase()}. DO NOT transcribe or copy the original text from the image. You must output the translated meaning.
+${needsContext ? `2. The "summary" and "dictionary" fields MUST remain strictly in ENGLISH to act as a system memory pivot.` : ""}
+
+Output strictly as valid JSON matching this structure without markdown formatting:
 {
-  "translations": ["translation 1", "translation 2"]${
+  "translations": ["translation for box 1", "translation for box 2"]${
     needsContext
       ? `,\n  "context": {\n    "summary": "...",\n    "dictionary": "..."\n  }`
       : ""
@@ -67,6 +75,7 @@ Output strictly as valid JSON matching this structure:
         },
       ],
       generationConfig: {
+        temperature: 0.3,
         responseMimeType: "application/json",
       },
     }),
