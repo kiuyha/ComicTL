@@ -18,7 +18,6 @@ export default defineBackground(() => {
     if (!tab?.id) return;
 
     if (info.menuItemId === "comictl-translate-image") {
-
       // Show popup if user not yet set up the extension
       if (await storage.getItem("sync:is-first-run", { fallback: true })) {
         browser.action
@@ -37,32 +36,14 @@ export default defineBackground(() => {
   // This only just forward messages to offscreen
   browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     if (msg.type === "DETECT_BBOX" || msg.type === "TRANSLATE_IMAGE") {
-      ensureOffscreen().then(async () => {
-        // Config being pass in background because it's not available in offscreen
-        const config = {
-          detectionModel:
-            (await storage.getItem<string>("sync:detection-model")) ??
-            "yolo26n",
-          currentMode:
-            (await storage.getItem<string>("sync:current-mode")) ?? "local",
-          sourceLang: await storage.getItem<string>("sync:source-lang"),
-          targetLang:
-            (await storage.getItem<string>("sync:target-lang")) ?? "EN",
-          geminiKey: (await storage.getItem<string>("sync:gemini-key")) ?? "",
-          geminiModel: await storage.getItem<string>("sync:gemini-model"),
-          autoUpdateModel:
-            (await storage.getItem<boolean>("sync:auto-update-model")) ?? true,
-          minConfidence:
-            (await storage.getItem<number>("sync:min-confidence")) ?? 0.5,
-        };
-
-        const response = await browser.runtime.sendMessage({
-          type: `OFFSCREEN_${msg.type}`,
-          data: msg.data,
-          config,
-        });
-
-        sendResponse(response);
+      ensureOffscreen().then(() => {
+        browser.runtime
+          .sendMessage({
+            ...msg,
+            type: `OFFSCREEN_${msg.type}`,
+          })
+          .then(sendResponse)
+          .catch((err) => sendResponse({ error: err.message }));
       });
 
       return true;

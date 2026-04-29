@@ -21,6 +21,7 @@
     X,
     TriangleAlert,
   } from "lucide-svelte";
+  import { DefaultConfig } from "@/lib/configs";
 
   let {
     seriesName,
@@ -28,95 +29,22 @@
     seriesName: string;
   } = $props();
 
-  const availableLanguages: string[] = JSON.parse(
-    import.meta.env.WXT_LANGUAGES ||
-      `[
-      "Auto-Detect",
-      "English",
-      "Japanese",
-      "Korean",
-      "Chinese (Simplified)",
-      "Chinese (Traditional)",
-      "Indonesian",
-      "Spanish",
-      "Portuguese",
-      "French",
-      "Vietnamese",
-      "Tagalog",
-      "Malay",
-      "Thai",
-      "Russian",
-      "Arabic",
-      "German",
-      "Italian",
-      "Dutch",
-      "Polish",
-      "Czech",
-      "Slovak",
-      "Croatian",
-      "Bosnian",
-      "Serbian",
-      "Slovenian",
-      "Danish",
-      "Norwegian",
-      "Swedish",
-      "Icelandic",
-      "Estonian",
-      "Lithuanian",
-      "Hungarian",
-      "Albanian",
-      "Welsh",
-      "Irish",
-      "Turkish",
-      "Afrikaans",
-      "Swahili",
-      "Uzbek",
-      "Latin",
-      "Bulgarian",
-      "Ukrainian",
-      "Belarusian",
-      "Greek",
-      "Urdu",
-      "Persian/Farsi",
-      "Hindi",
-      "Marathi",
-      "Nepali",
-      "Sanskrit",
-      "Tamil",
-      "Telugu"
-    ]`,
-  );
-
-  const geminiModels = JSON.parse(
-    import.meta.env.WXT_GEMINI_MODELS ||
-      "[" +
-        '{"id": "gemini-3.1-flash-lite-preview", "label": "Gemini 3.1 Flash Lite"},' +
-        '{"id": "gemini-3-flash", "label": "Gemini 3 Flash"},' +
-        '{"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash"},' +
-        '{"id": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash Lite"}' +
-        "]",
-  );
-
-  const detectionModels = JSON.parse(
-    import.meta.env.WXT_DETECTION_MODELS ||
-      '[{"id": "yolo26n", "label": "YOLO26-Nano"}, {"id": "yolo26s", "label": "YOLO26-Small"}]',
-  );
-
   let isFirstRun = $state(true);
   let activeTab = $state("home");
   let autoScan = $state(false);
   let shareData = $state(true);
   let geminiKey = $state("");
   let showKey = $state(false);
-  let geminiModel = $state("gemini-3.1-flash-lite-preview");
-  let detectionModel = $state("yolo26n");
-  let sourceLang = $state("Auto-Detect");
-  let targetLang = $state("English");
+  let geminiModel = $state(DefaultConfig.geminiModels[0].id);
+  let detectionModel = $state(DefaultConfig.detectionModels[0].id);
+  let ocrMinConfidence = $state(DefaultConfig.ocrMinConfidence);
+  let sourceLang = $state(DefaultConfig.sourceLang);
+  let targetLang = $state(DefaultConfig.targetLang);
   let activeDropdown = $state<"source" | "target" | null>(null);
   let searchQuery = $state("");
 
-  let autoUpdateModel = $state(true);
-  let minConfidence = $state(0.5);
+  let detectionAutoUpdate = $state(true);
+  let detectionMinConfidence = $state(0.5);
   let seriesContext = $state<SeriesContext>({
     seriesName,
     summary: "",
@@ -126,12 +54,12 @@
     recentHistory: [],
     translatedCount: 0,
   });
-  let currentMode = $state("local");
-  let activeDevice = $state("cpu");
+  let currentMode = $state(DefaultConfig.currentMode);
+  let activeDevice = $state(DefaultConfig.activeDevice);
   let loadingSettings = $state(true);
   let hasApiKey = $derived(geminiKey.trim().length > 0);
   let saveTimer: ReturnType<typeof setTimeout>;
-  let textFont = $state("system");
+  let textFont = $state(DefaultConfig.bundleFonts[0].id);
   let customFonts = $state<{ name: string; dataUrl: string }[]>([]);
   let fontUploading = $state(false);
   let isDraggingOver = $state(false);
@@ -144,13 +72,6 @@
     version: "",
     url: "",
   });
-
-  const BUNDLED_FONTS = [
-    { id: "system", label: "System", stack: "'Segoe UI', sans-serif" },
-    { id: "noto", label: "Noto Sans", stack: "'Noto Sans', sans-serif" },
-    { id: "bangers", label: "Bangers", stack: "'Bangers', cursive" },
-    { id: "comic", label: "Comic Neue", stack: "'Comic Neue', cursive" },
-  ] as const;
 
   const TABS = [
     { id: "home", label: "Home", icon: Zap },
@@ -185,7 +106,7 @@
   let tabIndex = $derived(TABS.findIndex((t) => t.id === activeTab));
 
   const visibleLanguages = $derived(
-    availableLanguages.filter((l) => {
+    DefaultConfig.availableLanguages.filter((l) => {
       const matchesSearch = l.toLowerCase().includes(searchQuery.toLowerCase());
       const isTargetAuto = activeDropdown === "target" && l === "Auto-Detect";
       const isLocalAuto =
@@ -229,8 +150,9 @@
     const items = await storage.getItems([
       "sync:is-first-run",
       "sync:share-data",
-      "sync:auto-update-model",
-      "sync:min-confidence",
+      "sync:detection-auto-update",
+      "sync:detection-min-confidence",
+      "sync:ocr-min-confidence",
       "sync:gemini-key",
       "sync:gemini-model",
       "sync:detection-model",
@@ -247,11 +169,13 @@
 
     isFirstRun = saved["sync:is-first-run"] ?? isFirstRun;
     shareData = saved["sync:share-data"] ?? shareData;
-    autoUpdateModel = saved["sync:auto-update-model"] ?? autoUpdateModel;
-    minConfidence = saved["sync:min-confidence"] ?? minConfidence;
+    detectionAutoUpdate = saved["sync:detection-auto-update"] ?? detectionAutoUpdate;
+    detectionMinConfidence =
+      saved["sync:detection-min-confidence"] ?? detectionMinConfidence;
     geminiKey = saved["sync:gemini-key"] ?? geminiKey;
     geminiModel = saved["sync:gemini-model"] ?? geminiModel;
     detectionModel = saved["sync:detection-model"] ?? detectionModel;
+    ocrMinConfidence = saved["sync:ocr-min-confidence"] ?? ocrMinConfidence;
     currentMode = saved["sync:current-mode"] ?? currentMode;
     sourceLang = saved["sync:source-lang"] ?? sourceLang;
     targetLang = saved["sync:target-lang"] ?? targetLang;
@@ -276,8 +200,8 @@
       storage.setItems([
         { key: "sync:is-first-run", value: isFirstRun },
         { key: "sync:share-data", value: shareData },
-        { key: "sync:auto-update-model", value: autoUpdateModel },
-        { key: "sync:min-confidence", value: minConfidence },
+        { key: "sync:detection-auto-update", value: detectionAutoUpdate },
+        { key: "sync:detection-min-confidence", value: detectionMinConfidence },
         { key: "sync:gemini-key", value: geminiKey },
         { key: "sync:gemini-model", value: geminiModel },
         { key: "sync:source-lang", value: sourceLang },
@@ -300,8 +224,8 @@
       [
         isFirstRun,
         shareData,
-        autoUpdateModel,
-        minConfidence,
+        detectionAutoUpdate,
+        detectionMinConfidence,
         geminiKey,
         geminiModel,
         sourceLang,
@@ -778,7 +702,7 @@
                   bind:value={detectionModel}
                   class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-2.5 text-xs outline-none cursor-pointer"
                 >
-                  {#each detectionModels as model}
+                  {#each DefaultConfig.detectionModels as model}
                     <option value={model.id}>{model.label}</option>
                   {/each}
                 </select>
@@ -793,7 +717,7 @@
                 <input
                   id="min-confidence"
                   type="number"
-                  bind:value={minConfidence}
+                  bind:value={detectionMinConfidence}
                   min="0"
                   max="1"
                   step="0.01"
@@ -813,7 +737,7 @@
                   >
                     <input
                       type="checkbox"
-                      bind:checked={autoUpdateModel}
+                      bind:checked={detectionAutoUpdate}
                       class="sr-only peer"
                     />
                     <div
@@ -872,7 +796,7 @@
                   bind:value={geminiModel}
                   class="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-2.5 outline-none cursor-pointer"
                 >
-                  {#each geminiModels as model}
+                  {#each DefaultConfig.geminiModels as model}
                     <option value={model.id}>{model.label}</option>
                   {/each}
                 </select>
@@ -897,7 +821,7 @@
                   Bubble Font
                 </label>
                 <div class="grid grid-cols-2 gap-1.5">
-                  {#each BUNDLED_FONTS as font}
+                  {#each DefaultConfig.bundleFonts as font}
                     <button
                       onclick={() => (textFont = font.id)}
                       class="px-3 py-2 rounded-xl border text-sm transition-all cursor-pointer text-left

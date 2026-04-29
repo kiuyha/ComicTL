@@ -10,9 +10,7 @@ import {
   sliceImageDataIntoLines,
 } from "./utils";
 import { downloadArtifactHF } from "../utils";
-
-const OCR_MODEL_REPO =
-  import.meta.env.WXT_OCR_MODEL_REPO || "monkt/paddleocr-onnx";
+import { DefaultConfig } from "../configs";
 
 let session: ort.InferenceSession | null = null;
 let charset: string[] | null = null;
@@ -29,12 +27,12 @@ export async function textRecognise(
   imageSrc: string,
   bboxes: Bbox[],
   sourceLang: string,
-  minConfidence = 0.75,
-  batchSize = 6,
-  autoUpdate = true,
-  recImgHeight = 48,
+  minConfidence = DefaultConfig.ocrMinConfidence,
+  autoUpdate = DefaultConfig.ocrAutoUpdate,
+  batchSize = DefaultConfig.ocrBatchSize,
+  recImgHeight = DefaultConfig.ocrRecImgHeight,
 ): Promise<{ text: string; confidence: number }[]> {
-  const langGroup = OcrGroupMap[sourceLang] || "latin";
+  const langGroup = DefaultConfig.ocrLangGroupMap[sourceLang] || "latin";
   if (session && currentLangGroup !== langGroup) {
     try {
       // Free the hardware memory allocated by the previous model
@@ -49,7 +47,7 @@ export async function textRecognise(
 
   if (!session) {
     session = await downloadArtifactHF(
-      OCR_MODEL_REPO,
+      DefaultConfig.ocrRepo,
       `languages/${langGroup}/rec.onnx`,
       autoUpdate,
     );
@@ -59,7 +57,7 @@ export async function textRecognise(
   if (!charset) {
     const dictText = await (
       await downloadArtifactHF(
-        OCR_MODEL_REPO,
+        DefaultConfig.ocrRepo,
         `languages/${langGroup}/dict.txt`,
       )
     ).text();
@@ -181,14 +179,9 @@ async function runBatches(
     const maxWHRatio = Math.max(...whRatios);
     const targetW = Math.max(Math.ceil(recImgHeight * maxWHRatio), 1);
 
-    const preprocessed = batchImages.map((c, i) => {
-      const tensor = preprocessCrop(c, targetW, recImgHeight);
-      // debugTensor(
-      //   tensor,
-      //   `batch${start}-crop${i} bbox${batchData[i].originalBboxIndex}`,
-      // );
-      return tensor;
-    });
+    const preprocessed = batchImages.map((c, i) =>
+      preprocessCrop(c, targetW, recImgHeight),
+    );
 
     const N = batchImages.length;
     const channels = 3;
@@ -252,72 +245,5 @@ async function runBatches(
       text: text.trim(),
       confidence: lineCount > 0 ? totalConf / lineCount : 0,
     };
-  });
-}
-
-const OcrGroupMap: Record<string, string> = {
-  // English
-  English: "english",
-
-  // Chinese/Japanese
-  Japanese: "chinese",
-  "Chinese (Simplified)": "chinese",
-  "Chinese (Traditional)": "chinese",
-
-  // Korean & Thai
-  Korean: "korean",
-  Thai: "thai",
-  Greek: "greek",
-
-  // East Slavic
-  Russian: "eslav",
-  Bulgarian: "eslav",
-  Ukrainian: "eslav",
-  Belarusian: "eslav",
-
-  // v3 Models (South Asian & Middle Eastern)
-  Arabic: "arabic",
-  Urdu: "arabic",
-  "Persian/Farsi": "arabic",
-  Hindi: "hindi",
-  Marathi: "hindi",
-  Nepali: "hindi",
-  Sanskrit: "hindi",
-  Tamil: "tamil",
-  Telugu: "telugu",
-
-  // All other Latin-based languages will default to "latin" if not explicitly mapped
-};
-
-export function debugTensor(tensor: ort.Tensor, label: string) {
-  const [, channels, height, width] = tensor.dims as number[];
-  const data = tensor.data as Float32Array;
-
-  const canvas = new OffscreenCanvas(width, height);
-  const ctx = canvas.getContext("2d")!;
-  const imgData = ctx.createImageData(width, height);
-
-  for (let row = 0; row < height; row++) {
-    for (let col = 0; col < width; col++) {
-      const pixelIdx = (row * width + col) * 4;
-      for (let c = 0; c < 3; c++) {
-        const val =
-          (data[c * height * width + row * width + col] * 0.5 + 0.5) * 255;
-        imgData.data[pixelIdx + c] = Math.max(
-          0,
-          Math.min(255, Math.round(val)),
-        );
-      }
-      imgData.data[pixelIdx + 3] = 255;
-    }
-  }
-
-  ctx.putImageData(imgData, 0, 0);
-  canvas.convertToBlob({ type: "image/png" }).then(async (blob) => {
-    const arrayBuffer = await blob.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-    const dataUrl = `data:image/png;base64,${base64}`;
-    console.log(`[${label}] ${width}x${height} — paste URL in new tab:`);
-    console.log(dataUrl);
   });
 }

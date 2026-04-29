@@ -1,3 +1,4 @@
+import { DefaultConfig } from "../configs";
 import { drawNumberedBboxes } from "./utils";
 
 interface TranslateResult {
@@ -12,7 +13,8 @@ export async function translateWithGemini(
   targetLang: string,
   sourceLang: string,
   seriesContext?: SeriesContext,
-  modelType = "gemini-3.1-flash-lite-preview",
+  model = DefaultConfig.geminiModels[0].id,
+  temperature = DefaultConfig.geminiTemperature,
 ): Promise<TranslateResult> {
   const cleanBase64 = (await drawNumberedBboxes(imageSrc, bboxes)).replace(
     /^data:image\/(png|jpeg|webp);base64,/,
@@ -21,7 +23,7 @@ export async function translateWithGemini(
   const needsContext =
     !seriesContext?.summary ||
     !seriesContext?.dictionary ||
-    (seriesContext?.translatedCount ?? 0) % 5 === 0;
+    (seriesContext?.translatedCount ?? 0) % DefaultConfig.minTranslations === 0;
 
   const prompt = `You are a professional manga translator${seriesContext?.seriesName ? ` working on "${seriesContext.seriesName}"` : ""}.
 Translate the text in the numbered bounding boxes in the provided image${sourceLang !== "Auto-Detect" ? ` FROM ${sourceLang.toUpperCase()}` : ""} INTO ${targetLang.toUpperCase()}.
@@ -53,7 +55,7 @@ Output strictly as valid JSON matching this structure without markdown formattin
   }
 }`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelType}:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const response = await fetch(url, {
     method: "POST",
@@ -75,7 +77,7 @@ Output strictly as valid JSON matching this structure without markdown formattin
         },
       ],
       generationConfig: {
-        temperature: 0.3,
+        temperature,
         responseMimeType: "application/json",
       },
     }),

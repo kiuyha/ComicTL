@@ -112,24 +112,22 @@ export default defineContentScript({
                 return { bboxes: cache.bboxes, translatedSrc };
               },
 
-              requestBubbleDetection: async () => {
-                const detectionModel =
-                  (await storage.getItem<string>("sync:detection-model")) ??
-                  "yolo26n";
-                const cacheKey = `bbox-cache-${detectionModel}-${seriesName}-${chapterId}-${pageIndex}`;
-                const cache = await storage.getItem<Bbox[]>(`local:${cacheKey}`);
-                if (cache) {
-                  console.log("BBOX CACHE HIT");
-                  return cache
-                };
-                const bboxes = await browser.runtime.sendMessage({
+              requestBubbleDetection: async () =>
+                browser.runtime.sendMessage({
                   type: "DETECT_BBOX",
                   data: originalSrc,
-                });
-                console.log("BBOX CACHE MISS");
-                await storage.setItem(`local:${cacheKey}`, bboxes);
-                return bboxes;
-              },
+                  config: {
+                    detectionModel: await storage.getItem<string>(
+                      "sync:detection-model",
+                    ),
+                    autoUpdateModel: await storage.getItem<boolean>(
+                      "sync:detection-auto-update",
+                    ),
+                    detectionMinConfidence: await storage.getItem<number>(
+                      "sync:detection-min-confidence",
+                    ),
+                  },
+                }),
 
               requestTextTranslation: async (
                 bboxes: Bbox[],
@@ -170,6 +168,26 @@ export default defineContentScript({
                     bboxes,
                     seriesContext,
                   },
+                  config: {
+                    currentMode: await storage.getItem<string>(
+                      "sync:current-mode",
+                    ),
+                    targetLang: await storage.getItem<string>(
+                      "sync:target-lang",
+                    ),
+                    sourceLang: await storage.getItem<string>(
+                      "sync:source-lang",
+                    ),
+                    geminiKey: await storage.getItem<string>(
+                      "sync:gemini-key",
+                    ),
+                    geminiModel: await storage.getItem<string>(
+                      "sync:gemini-model",
+                    ),
+                    ocrMinConfidence: await storage.getItem<number>(
+                      "sync:ocr-min-confidence",
+                    )
+                  }
                 });
 
                 if (resp?.error) return resp;

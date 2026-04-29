@@ -38,9 +38,6 @@ jobs:
           WXT_DETECTION_MODEL_REPO: ${{ secrets.WXT_DETECTION_MODEL_REPO }}
           WXT_SUPABASE_URL: ${{ secrets.WXT_SUPABASE_URL }}
           WXT_SUPABASE_PUBLIC_KEY: ${{ secrets.WXT_SUPABASE_PUBLIC_KEY }}
-          WXT_LANGUAGES: ${{ secrets.WXT_LANGUAGES }}
-          WXT_GEMINI_MODELS: ${{ secrets.WXT_GEMINI_MODELS }}
-          WXT_DETECTION_MODELS: ${{ secrets.WXT_DETECTION_MODELS }}
           WXT_LATEST_RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/latest
 
       - name: Create Release

@@ -1,6 +1,7 @@
 import * as ort from "onnxruntime-web/all";
 import { downloadArtifactHF } from "../utils";
 import { scalingImage, restoreBoundingBox, containmentNMS } from "./utils";
+import { DefaultConfig } from "../configs";
 
 ort.env.wasm.wasmPaths = browser.runtime.getURL("/");
 
@@ -10,9 +11,9 @@ let runLock: Promise<void> = Promise.resolve();
 
 export async function detectTextBubble(
   imageSrc: string,
-  minConfidence: number = 0.5,
-  requestedModel: string = "yolo26n",
-  autoUpdate: boolean = true,
+  minConfidence: number = DefaultConfig.detectionMinConfidence,
+  requestedModel: string = DefaultConfig.detectionModels[0].id,
+  autoUpdate: boolean = DefaultConfig.detectionAutoUpdate,
 ) {
   if (session && currentModelName !== requestedModel) {
     try {
@@ -26,7 +27,7 @@ export async function detectTextBubble(
 
   if (!session) {
     session = await downloadArtifactHF(
-      import.meta.env.WXT_DETECTION_MODEL_REPO || "Kiuyha/Manga-Bubble-YOLO",
+      DefaultConfig.detectionModelRepo,
       `onnx/${requestedModel}.onnx`,
       autoUpdate,
     );
