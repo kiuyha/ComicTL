@@ -1,3 +1,5 @@
+import { detectHardware, ensureOffscreen } from "./utils";
+
 export default defineBackground(() => {
   // Make Context menu (Popup shows on right click)
   browser.runtime.onInstalled.addListener(async (details) => {
@@ -67,41 +69,3 @@ export default defineBackground(() => {
     }
   });
 });
-
-async function ensureOffscreen() {
-  if (await browser.offscreen.hasDocument()) return;
-
-  await browser.offscreen.createDocument({
-    url: "/offscreen.html",
-    reasons: [browser.offscreen.Reason.BLOBS],
-    justification: "Image Processing",
-  });
-}
-
-async function detectHardware() {
-  if ("ml" in navigator) {
-    try {
-      const mlContext = await (navigator.ml as any).createContext({
-        deviceType: "npu",
-      });
-      if (mlContext) {
-        return "npu";
-      }
-    } catch (error) {
-      console.warn("WebNN NPU not available or context creation failed.");
-    }
-  }
-
-  if ("gpu" in navigator) {
-    try {
-      const adapter = await navigator.gpu.requestAdapter();
-      if (adapter) {
-        return "gpu";
-      }
-    } catch (error) {
-      console.warn("GPU adapter request failed.");
-    }
-  }
-
-  return "cpu";
-}

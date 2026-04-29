@@ -2,7 +2,12 @@ import Overlay from "@/lib/components/Overlay.svelte";
 import { mount, unmount } from "svelte";
 import { ShadowRootContentScriptUi } from "#imports";
 import { getAdapter } from "@/lib/adapters";
-import { repaintWithTranslations, sendBboxData } from "@/lib/utils";
+import {
+  createImageObservers,
+  repaintWithTranslations,
+  sendBboxDataToSupabase,
+  updateSeriesContext,
+} from "./utils";
 import "@/assets/app.css";
 
 const srcKey = (src: string) => src.slice(0, 100);
@@ -107,11 +112,24 @@ export default defineContentScript({
                 return { bboxes: cache.bboxes, translatedSrc };
               },
 
-              requestBubbleDetection: () =>
-                browser.runtime.sendMessage({
+              requestBubbleDetection: async () => {
+                const detectionModel =
+                  (await storage.getItem<string>("sync:detection-model")) ??
+                  "yolo26n";
+                const cacheKey = `bbox-cache-${detectionModel}-${seriesName}-${chapterId}-${pageIndex}`;
+                const cache = await storage.getItem<Bbox[]>(`local:${cacheKey}`);
+                if (cache) {
+                  console.log("BBOX CACHE HIT");
+                  return cache
+                };
+                const bboxes = await browser.runtime.sendMessage({
                   type: "DETECT_BBOX",
                   data: originalSrc,
-                }),
+                });
+                console.log("BBOX CACHE MISS");
+                await storage.setItem(`local:${cacheKey}`, bboxes);
+                return bboxes;
+              },
 
               requestTextTranslation: async (
                 bboxes: Bbox[],
@@ -120,7 +138,7 @@ export default defineContentScript({
                 const shareData =
                   await storage.getItem<boolean>("sync:share-data");
                 if (shareData && isManuallySorted)
-                  sendBboxData(
+                  sendBboxDataToSupabase(
                     seriesName,
                     chapterId,
                     pageIndex,
@@ -219,84 +237,3 @@ export default defineContentScript({
     });
   },
 });
-
-async function updateSeriesContext(
-  cleanContext: SeriesContext | null,
-  seriesName: string,
-  chapterId: string,
-  pageIndex: number,
-  translations: Translations,
-  context?: { summary?: string; dictionary?: string },
-) {
-  // If no context existed at all, build a fresh one
-  const stored = cleanContext ?? {
-    seriesName: seriesName,
-    summary: "",
-    dictionary: "",
-    lastChapterId: null,
-    lastPageIndex: null,
-    recentHistory: [],
-    translatedCount: 0,
-  };
-
-  // Update summary/dictionary if provided
-  if (context) {
-    stored.summary = context.summary ?? stored.summary;
-    stored.dictionary = context.dictionary ?? stored.dictionary;
-  }
-
-  stored.translatedCount += 1;
-  stored.lastChapterId = chapterId;
-  stored.lastPageIndex = pageIndex;
-
-  // Push the new history object into the buffer
-  const formattedText = translations.join(" | ");
-  stored.recentHistory = [
-    ...stored.recentHistory.slice(-4),
-    { chapterId, pageIndex, text: formattedText },
-  ];
-
-  await storage.setItem(`sync:context-${seriesName}`, stored);
-}
-
-function createImageObservers(originalSrc: string, wrapper: HTMLElement) {
-  // Syncs wrapper visibility to whatever img is currently inside it
-  const styleObserver = new MutationObserver(() => {
-    const img = wrapper.querySelector("img");
-    if (img) wrapper.style.display = img.style.display;
-  });
-
-  // Re-attaches wrapper when MangaDex remounts a fresh img element
-  const domObserver = new MutationObserver(() => {
-    // Debounce so we only react after MangaDex finishes all its mutations
-    const allImgs = Array.from(
-      document.querySelectorAll<HTMLImageElement>(
-        `img[src="${originalSrc.replace(/"/g, '\\"')}"]`,
-      ),
-    );
-    if (!allImgs.length) return;
-
-    const freshImg = allImgs.find((img) => img.parentElement !== wrapper);
-    if (!freshImg) return;
-
-    domObserver.disconnect();
-
-    wrapper.querySelectorAll("img").forEach((img) => img.remove());
-
-    freshImg.insertAdjacentElement("beforebegin", wrapper);
-    wrapper.appendChild(freshImg);
-
-    wrapper.style.display =
-      freshImg.style.display || getComputedStyle(freshImg).display;
-
-    styleObserver.disconnect();
-    styleObserver.observe(freshImg, {
-      attributes: true,
-      attributeFilter: ["style"],
-    });
-
-    domObserver.observe(document.body, { childList: true, subtree: true });
-  });
-
-  return { styleObserver, domObserver };
-}

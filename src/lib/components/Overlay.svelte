@@ -18,14 +18,17 @@
     scaleY: number;
     originalSrc: string;
     wrapper: HTMLElement;
-    getTranslationCache: () => Promise<{
-      bboxes: Bbox[];
-      translatedSrc: string;
-    }|undefined>;
+    getTranslationCache: () => Promise<
+      | {
+          bboxes: Bbox[];
+          translatedSrc: string;
+        }
+      | undefined
+    >;
     requestBubbleDetection: () => Promise<Bbox[] | { error: string }>;
     requestTextTranslation: (
       bboxes: Bbox[],
-      isManuallySorted: boolean
+      isManuallySorted: boolean,
     ) => Promise<string | { error: string }>;
     onClose: () => void;
   }
@@ -68,41 +71,73 @@
   function showError(msg: string) {
     clearTimeout(errorTimer);
     errorMsg = msg;
-    errorTimer = setTimeout(() => (errorMsg = ""), 5000);
+    errorTimer = setTimeout(() => (errorMsg = ""), 2000);
   }
 
-  function applyBboxesSort() {
-    let totalHeight = 0;
+function applyBboxesSort() {
+    if (bboxes.length === 0) return;
 
+    let totalHeight = 0;
     bboxes.forEach((box) => {
       totalHeight += box.y2 - box.y1;
     });
-
-    const avgHeight = bboxes.length > 0 ? totalHeight / bboxes.length : 100;
-    // 75% of an average bubble is a very safe threshold for the same panel row
-    const yTolerance = avgHeight * 0.75;
+    const avgHeight = totalHeight / bboxes.length;
 
     const originalBboxes = bboxes.slice();
-    bboxes.sort((a, b) => {
-      // Compare the center points instead of the top edges
-      const aCenterY = (a.y1 + a.y2) / 2;
-      const bCenterY = (b.y1 + b.y2) / 2;
-      const yDiff = aCenterY - bCenterY;
 
-      // If they are on roughly the same horizontal line
-      if (Math.abs(yDiff) < yTolerance) {
-        // Sort Right-to-Left using center X
-        const aCenterX = (a.x1 + a.x2) / 2;
-        const bCenterX = (b.x1 + b.x2) / 2;
-        return bCenterX - aCenterX;
+    // Calculate Center coordinates and sort strictly top-to-bottom to prepare for grouping
+    const boxesWithCenters = bboxes.map(box => ({
+      box,
+      centerY: (box.y1 + box.y2) / 2,
+      centerX: (box.x1 + box.x2) / 2
+    })).sort((a, b) => a.centerY - b.centerY);
+
+    // Agglomerative Clustering: Group into distinct Horizontal Bands (Panels)
+    const bands: typeof boxesWithCenters[] = [];
+    let currentBand = [boxesWithCenters[0]];
+    let currentBandAvgY = boxesWithCenters[0].centerY;
+
+    // 80% of average bubble height is a highly reliable threshold to detect panel gutters
+    const yTolerance = avgHeight * 0.8;
+
+    for (let i = 1; i < boxesWithCenters.length; i++) {
+      const item = boxesWithCenters[i];
+      if (item.centerY - currentBandAvgY < yTolerance) {
+        currentBand.push(item);
+        currentBandAvgY = currentBand.reduce((sum, curr) => sum + curr.centerY, 0) / currentBand.length;
+      } else {
+        bands.push(currentBand);
+        currentBand = [item];
+        currentBandAvgY = item.centerY;
       }
+    }
+    bands.push(currentBand);
 
-      // Otherwise, sort Top-to-Bottom
-      return yDiff;
+    // Sort inside each panel using Manga Diagonal Flow (Top-Right to Bottom-Left)
+    const result: typeof bboxes = [];
+
+    bands.forEach((band) => {
+      band.sort((a, b) => {
+        // Weight Y twice as heavily as X. This handles edge cases where a bubble is further left, but significantly higher.
+        const weightY = 2.0; 
+
+        const scoreA = a.centerX - (a.centerY * weightY);
+        const scoreB = b.centerX - (b.centerY * weightY);
+
+        return scoreB - scoreA; 
+      });
+
+      result.push(...band.map(item => item.box));
     });
 
-    if (!originalBboxes.every((box, i) => box.x1 === bboxes[i].x1))
-      saveHistory();
+    bboxes = result;
+
+    // Verify if order actually changed to prevent unnecessary history states
+    const isChanged = !originalBboxes.every(
+      (box, i) => box.x1 === bboxes[i].x1 && box.y1 === bboxes[i].y1
+    );
+
+    if (isChanged) saveHistory();
     activeIndex = null;
   }
 
@@ -136,7 +171,10 @@
     loadingMsg = "Please wait while we translate the text...";
     applyBboxesSort();
 
-    const translations = await requestTextTranslation($state.snapshot(bboxes), isManuallySorted);
+    const translations = await requestTextTranslation(
+      $state.snapshot(bboxes),
+      isManuallySorted,
+    );
     if (typeof translations === "object" && translations?.error) {
       mode = "refining";
       showError(translations.error);
@@ -163,6 +201,7 @@
         y1: targetImageRect.top,
         x2: 0.5 * targetImageRect.width + targetImageRect.left,
         y2: 0.5 * targetImageRect.height + targetImageRect.top,
+        confidence: 1,
       },
     ];
     if (!isManuallySorted) {
@@ -206,6 +245,7 @@
     }
 
     bboxes = rawBboxes.map((box) => ({
+      ...box,
       x1: Math.max(0, box.x1 - PADDING_PX),
       y1: Math.max(0, box.y1 - PADDING_PX),
       x2: box.x2 + PADDING_PX,
@@ -512,6 +552,7 @@
           activeIndex = i;
           handleDragStart(i, "move")(e);
         }}
+        title={`Confidence: ${(box.confidence * 100).toPrecision(2)}%`}
       >
         <div
           class="absolute -top-5.5 -left-0.5 bg-red-500 text-white font-bold text-sm px-1.5 py-0.5 min-w-6 text-center rounded-t-sm pointer-events-none"

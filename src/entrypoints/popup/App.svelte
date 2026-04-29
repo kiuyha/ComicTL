@@ -28,6 +28,80 @@
     seriesName: string;
   } = $props();
 
+  const availableLanguages: string[] = JSON.parse(
+    import.meta.env.WXT_LANGUAGES ||
+      `[
+      "Auto-Detect",
+      "English",
+      "Japanese",
+      "Korean",
+      "Chinese (Simplified)",
+      "Chinese (Traditional)",
+      "Indonesian",
+      "Spanish",
+      "Portuguese",
+      "French",
+      "Vietnamese",
+      "Tagalog",
+      "Malay",
+      "Thai",
+      "Russian",
+      "Arabic",
+      "German",
+      "Italian",
+      "Dutch",
+      "Polish",
+      "Czech",
+      "Slovak",
+      "Croatian",
+      "Bosnian",
+      "Serbian",
+      "Slovenian",
+      "Danish",
+      "Norwegian",
+      "Swedish",
+      "Icelandic",
+      "Estonian",
+      "Lithuanian",
+      "Hungarian",
+      "Albanian",
+      "Welsh",
+      "Irish",
+      "Turkish",
+      "Afrikaans",
+      "Swahili",
+      "Uzbek",
+      "Latin",
+      "Bulgarian",
+      "Ukrainian",
+      "Belarusian",
+      "Greek",
+      "Urdu",
+      "Persian/Farsi",
+      "Hindi",
+      "Marathi",
+      "Nepali",
+      "Sanskrit",
+      "Tamil",
+      "Telugu"
+    ]`,
+  );
+
+  const geminiModels = JSON.parse(
+    import.meta.env.WXT_GEMINI_MODELS ||
+      "[" +
+        '{"id": "gemini-3.1-flash-lite-preview", "label": "Gemini 3.1 Flash Lite"},' +
+        '{"id": "gemini-3-flash", "label": "Gemini 3 Flash"},' +
+        '{"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash"},' +
+        '{"id": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash Lite"}' +
+        "]",
+  );
+
+  const detectionModels = JSON.parse(
+    import.meta.env.WXT_DETECTION_MODELS ||
+      '[{"id": "yolo26n", "label": "YOLO26-Nano"}, {"id": "yolo26s", "label": "YOLO26-Small"}]',
+  );
+
   let isFirstRun = $state(true);
   let activeTab = $state("home");
   let autoScan = $state(false);
@@ -110,70 +184,33 @@
 
   let tabIndex = $derived(TABS.findIndex((t) => t.id === activeTab));
 
-  const languages: string[] = JSON.parse(
-    import.meta.env.WXT_LANGUAGES ||
-      `[
-      "Auto-Detect",
-      "English",
-      "Japanese",
-      "Korean",
-      "Chinese (Simplified)",
-      "Chinese (Traditional)",
-      "Indonesian",
-      "Spanish",
-      "Portuguese",
-      "French",
-      "Vietnamese",
-      "Tagalog",
-      "Malay",
-      "Thai",
-      "Russian",
-      "Arabic",
-      "German",
-      "Italian"
-    ]`,
-  );
-
-  const geminiModels = JSON.parse(
-    import.meta.env.WXT_GEMINI_MODELS ||
-      "[" +
-        '{"id": "gemini-3.1-flash-lite-preview", "label": "Gemini 3.1 Flash Lite"},' +
-        '{"id": "gemini-3-flash", "label": "Gemini 3 Flash"},' +
-        '{"id": "gemini-2.5-flash", "label": "Gemini 2.5 Flash"},' +
-        '{"id": "gemini-2.5-flash-lite", "label": "Gemini 2.5 Flash Lite"}' +
-        "]",
-  );
-
-  const detectionModels = JSON.parse(
-    import.meta.env.WXT_DETECTION_MODELS ||
-      '[{"id": "yolo26n", "label": "YOLO26-Nano"}, {"id": "yolo26s", "label": "YOLO26-Small"}]',
-  );
-
   const visibleLanguages = $derived(
-    languages.filter((l) => {
+    availableLanguages.filter((l) => {
       const matchesSearch = l.toLowerCase().includes(searchQuery.toLowerCase());
       const isTargetAuto = activeDropdown === "target" && l === "Auto-Detect";
-      return matchesSearch && !isTargetAuto;
+      const isLocalAuto =
+        activeDropdown === "source" &&
+        currentMode === "local" &&
+        l === "Auto-Detect";
+      return matchesSearch && !isTargetAuto && !isLocalAuto;
     }),
   );
 
   function setMode(modeId: string) {
     currentMode = modeId;
     if (modeId === "cloud") {
-      sourceLang = "AUTO";
-    } else if (modeId === "local" && sourceLang === "AUTO") {
-      sourceLang = "JA";
+      sourceLang = "Auto-Detect";
+    } else if (modeId === "local" && sourceLang === "Auto-Detect") {
+      sourceLang = "English";
     }
   }
 
   function swapLanguages() {
-    if (sourceLang === "AUTO") {
+    if (sourceLang === "Auto-Detect") {
       sourceLang = targetLang;
-      targetLang = "EN";
+      targetLang = "English";
     } else {
-      const temp = sourceLang;
-      sourceLang = targetLang;
-      targetLang = temp;
+      [sourceLang, targetLang] = [targetLang, sourceLang];
     }
   }
 

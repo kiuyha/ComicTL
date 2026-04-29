@@ -1,14 +1,15 @@
-import { detectTextBubble } from "@/lib/detections";
-import { translateWithGemini } from "@/lib/gemini";
-import '@/assets/app.css';
+import { detectTextBubble } from "@/lib/detections/main";
+import { translateWithGemini } from "@/lib/gemini/main";
+import "@/assets/app.css";
+import { textRecognise } from "@/lib/ocr/main";
 
 browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
   if (msg.type === "OFFSCREEN_DETECT_BBOX") {
     const { detectionModel, autoUpdateModel, minConfidence } = msg.config;
 
-    detectTextBubble(msg.data, minConfidence, detectionModel, autoUpdateModel).then(
-      sendResponse,
-    ).catch((err) => sendResponse({ error : err.message }));
+    detectTextBubble(msg.data, minConfidence, detectionModel, autoUpdateModel)
+      .then(sendResponse)
+      .catch((err) => sendResponse({ error: err.message }));
 
     return true;
   }
@@ -19,7 +20,10 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     const { src, bboxes, seriesContext } = msg.data;
 
     if (currentMode === "local") {
-      throw new Error("Local mode not supported in offscreen");
+      textRecognise(src, bboxes, sourceLang).then((texts) => {
+        console.log(texts);
+      });
+      // .catch((err) => sendResponse({ error: err.message }));
     } else {
       translateWithGemini(
         src,
@@ -28,7 +32,7 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         targetLang,
         sourceLang,
         seriesContext,
-        geminiModel
+        geminiModel,
       )
         .then(sendResponse)
         .catch((err) => sendResponse({ error: err.message }));
