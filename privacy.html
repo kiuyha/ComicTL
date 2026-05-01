@@ -1,372 +1,584 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Policy | ComicTL</title>
-  <meta name="description" content="ComicTL Privacy Policy. Understand how your data is handled in Local Mode, Cloud Mode, and optional telemetry participation.">
-  <meta name="robots" content="noindex, follow">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy | ComicTL</title>
+    <meta
+      name="description"
+      content="ComicTL Privacy Policy. Understand how your data is handled in Local Mode, Cloud Mode, and optional telemetry participation."
+    />
+    <meta name="robots" content="noindex, follow" />
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;1,9..40,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;1,9..40,400&family=DM+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
 
-  <style>
-    *, *::before, *::after { box-sizing: border-box; }
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
 
-    body {
-      font-family: 'DM Sans', sans-serif;
-      background-color: #09090b;
-      color: #f4f4f5;
-    }
+      body {
+        font-family: "DM Sans", sans-serif;
+        background-color: #09090b;
+        color: #f4f4f5;
+      }
 
-    .top-bar {
-      background: linear-gradient(90deg, transparent, #3b82f6 30%, #60a5fa 60%, transparent);
-      height: 1px;
-      width: 100%;
-    }
+      .top-bar {
+        background: linear-gradient(
+          90deg,
+          transparent,
+          #3b82f6 30%,
+          #60a5fa 60%,
+          transparent
+        );
+        height: 1px;
+        width: 100%;
+      }
 
-    .nav-link { color: #a1a1aa; transition: color 0.2s; }
-    .nav-link:hover { color: #f4f4f5; }
+      .nav-link {
+        color: #a1a1aa;
+        transition: color 0.2s;
+      }
+      .nav-link:hover {
+        color: #f4f4f5;
+      }
 
-    .btn-outline {
-      background: transparent;
-      color: #a1a1aa;
-      border: 1px solid #3f3f46;
-      transition: border-color 0.2s, color 0.2s;
-    }
-    .btn-outline:hover { border-color: #71717a; color: #f4f4f5; }
+      .btn-outline {
+        background: transparent;
+        color: #a1a1aa;
+        border: 1px solid #3f3f46;
+        transition:
+          border-color 0.2s,
+          color 0.2s;
+      }
+      .btn-outline:hover {
+        border-color: #71717a;
+        color: #f4f4f5;
+      }
 
-    /* TOC */
-    .toc-link {
-      display: block;
-      padding: 0.35rem 0.75rem;
-      border-left: 2px solid transparent;
-      color: #71717a;
-      font-size: 0.8rem;
-      font-family: 'DM Mono', monospace;
-      transition: color 0.2s, border-color 0.2s;
-      text-decoration: none;
-    }
-    .toc-link:hover { color: #a1a1aa; border-left-color: #3f3f46; }
-    .toc-link.active { color: #60a5fa; border-left-color: #3b82f6; }
+      /* TOC */
+      .toc-link {
+        display: block;
+        padding: 0.35rem 0.75rem;
+        border-left: 2px solid transparent;
+        color: #71717a;
+        font-size: 0.8rem;
+        font-family: "DM Mono", monospace;
+        transition:
+          color 0.2s,
+          border-color 0.2s;
+        text-decoration: none;
+      }
+      .toc-link:hover {
+        color: #a1a1aa;
+        border-left-color: #3f3f46;
+      }
+      .toc-link.active {
+        color: #60a5fa;
+        border-left-color: #3b82f6;
+      }
 
-    .section-anchor { scroll-margin-top: 100px; }
+      .section-anchor {
+        scroll-margin-top: 100px;
+      }
 
-    footer a { color: #71717a; transition: color 0.2s; text-decoration: none; }
-    footer a:hover { color: #a1a1aa; }
+      footer a {
+        color: #71717a;
+        transition: color 0.2s;
+        text-decoration: none;
+      }
+      footer a:hover {
+        color: #a1a1aa;
+      }
 
-    /* ── Rendered markdown prose ── */
-    #policy-content h2 {
-      font-family: 'Syne', sans-serif;
-      font-weight: 700;
-      font-size: 1.35rem;
-      color: #f4f4f5;
-      letter-spacing: -0.01em;
-      margin: 0 0 0.85rem 0;
-    }
+      /* ── Rendered markdown prose ── */
+      #policy-content h2 {
+        font-family: "Syne", sans-serif;
+        font-weight: 700;
+        font-size: 1.35rem;
+        color: #f4f4f5;
+        letter-spacing: -0.01em;
+        margin: 0 0 0.85rem 0;
+      }
 
-    #policy-content h3 {
-      font-family: 'Syne', sans-serif;
-      font-weight: 700;
-      font-size: 1rem;
-      color: #d4d4d8;
-      margin: 1.5rem 0 0.6rem 0;
-    }
+      #policy-content h3 {
+        font-family: "Syne", sans-serif;
+        font-weight: 700;
+        font-size: 1rem;
+        color: #d4d4d8;
+        margin: 1.5rem 0 0.6rem 0;
+      }
 
-    #policy-content p {
-      color: #a1a1aa;
-      font-size: 0.925rem;
-      line-height: 1.75;
-      margin-bottom: 0.9rem;
-    }
+      #policy-content p {
+        color: #a1a1aa;
+        font-size: 0.925rem;
+        line-height: 1.75;
+        margin-bottom: 0.9rem;
+      }
 
-    #policy-content ul { list-style: none; padding: 0; margin: 0.75rem 0 1rem 0; }
+      #policy-content ul {
+        list-style: none;
+        padding: 0;
+        margin: 0.75rem 0 1rem 0;
+      }
 
-    #policy-content ul li {
-      display: flex;
-      align-items: flex-start;
-      gap: 0.6rem;
-      color: #a1a1aa;
-      font-size: 0.925rem;
-      line-height: 1.7;
-      margin-bottom: 0.5rem;
-    }
+      #policy-content ul li {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        color: #a1a1aa;
+        font-size: 0.925rem;
+        line-height: 1.7;
+        margin-bottom: 0.5rem;
+      }
 
-    #policy-content ul li::before {
-      content: '';
-      display: inline-block;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #3b82f6;
-      flex-shrink: 0;
-      margin-top: 0.5rem;
-    }
+      #policy-content ul li::before {
+        content: "";
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #3b82f6;
+        flex-shrink: 0;
+        margin-top: 0.5rem;
+      }
 
-    #policy-content strong { color: #d4d4d8; font-weight: 500; }
+      #policy-content strong {
+        color: #d4d4d8;
+        font-weight: 500;
+      }
 
-    #policy-content code {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.82rem;
-      color: #93c5fd;
-      background: rgba(59,130,246,0.08);
-      border: 1px solid rgba(59,130,246,0.15);
-      padding: 0.1em 0.4em;
-      border-radius: 4px;
-    }
+      #policy-content code {
+        font-family: "DM Mono", monospace;
+        font-size: 0.82rem;
+        color: #93c5fd;
+        background: rgba(59, 130, 246, 0.08);
+        border: 1px solid rgba(59, 130, 246, 0.15);
+        padding: 0.1em 0.4em;
+        border-radius: 4px;
+      }
 
-    /* Section card */
-    .policy-section {
-      background: rgba(24,24,27,0.6);
-      border: 1px solid #27272a;
-      border-radius: 1rem;
-      padding: 2rem 2.25rem;
-      margin-bottom: 2rem;
-    }
+      /* Section card */
+      .policy-section {
+        background: rgba(24, 24, 27, 0.6);
+        border: 1px solid #27272a;
+        border-radius: 1rem;
+        padding: 2rem 2.25rem;
+        margin-bottom: 2rem;
+      }
 
-    .section-number {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.7rem;
-      color: #3b82f6;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      margin-bottom: 0.4rem;
-    }
+      .section-number {
+        font-family: "DM Mono", monospace;
+        font-size: 0.7rem;
+        color: #3b82f6;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        margin-bottom: 0.4rem;
+      }
 
-    /* Callout blockquotes */
-    #policy-content blockquote {
-      margin: 1rem 0;
-      padding: 0.9rem 1.1rem;
-      border-radius: 0.75rem;
-      border: none;
-    }
-    #policy-content blockquote p {
-      font-family: 'DM Mono', monospace;
-      font-size: 0.875rem;
-      line-height: 1.6;
-      margin: 0;
-    }
-    #policy-content blockquote.callout-ok  { background: rgba(34,197,94,0.05);  border: 1px solid rgba(34,197,94,0.2);  }
-    #policy-content blockquote.callout-ok p { color: #86efac; }
-    #policy-content blockquote.callout-warn { background: rgba(245,158,11,0.05); border: 1px solid rgba(245,158,11,0.2); }
-    #policy-content blockquote.callout-warn p { color: #fde68a; }
-    #policy-content blockquote.callout-info { background: rgba(59,130,246,0.05); border: 1px solid rgba(59,130,246,0.2); }
-    #policy-content blockquote.callout-info p { color: #bfdbfe; }
+      /* Callout blockquotes */
+      #policy-content blockquote {
+        margin: 1rem 0;
+        padding: 0.9rem 1.1rem;
+        border-radius: 0.75rem;
+        border: none;
+      }
+      #policy-content blockquote p {
+        font-family: "DM Mono", monospace;
+        font-size: 0.875rem;
+        line-height: 1.6;
+        margin: 0;
+      }
+      #policy-content blockquote.callout-ok {
+        background: rgba(34, 197, 94, 0.05);
+        border: 1px solid rgba(34, 197, 94, 0.2);
+      }
+      #policy-content blockquote.callout-ok p {
+        color: #86efac;
+      }
+      #policy-content blockquote.callout-warn {
+        background: rgba(245, 158, 11, 0.05);
+        border: 1px solid rgba(245, 158, 11, 0.2);
+      }
+      #policy-content blockquote.callout-warn p {
+        color: #fde68a;
+      }
+      #policy-content blockquote.callout-info {
+        background: rgba(59, 130, 246, 0.05);
+        border: 1px solid rgba(59, 130, 246, 0.2);
+      }
+      #policy-content blockquote.callout-info p {
+        color: #bfdbfe;
+      }
 
-    #policy-content > hr { display: none; }
-    #policy-content em { color: #52525b; font-size: 0.8rem; }
+      #policy-content > hr {
+        display: none;
+      }
+      #policy-content em {
+        color: #52525b;
+        font-size: 0.8rem;
+      }
 
-    /* Shimmer skeleton */
-    .loading-pulse {
-      background: linear-gradient(90deg, #27272a 25%, #3f3f46 50%, #27272a 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.5s infinite;
-      border-radius: 0.5rem;
-    }
-    @keyframes shimmer {
-      0%   { background-position:  200% 0; }
-      100% { background-position: -200% 0; }
-    }
-  </style>
-</head>
-<body class="antialiased">
-
-  <div class="top-bar"></div>
-
-  <header class="sticky top-0 z-50" style="background: rgba(9,9,11,0.9); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(39,39,42,0.6);">
-    <nav class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-      <a href="index.html" class="flex items-center gap-2.5">
-        <div class="w-7 h-7 rounded-md flex items-center justify-center" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <span style="font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; color: #f4f4f5; letter-spacing: -0.01em;">ComicTL</span>
-      </a>
-      <div class="flex items-center gap-6">
-        <a href="index.html" class="nav-link text-sm font-medium">Back to Home</a>
-        <a href="https://github.com/kiuyha/ComicTL" target="_blank" rel="noopener noreferrer"
-           class="btn-outline inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.165 6.839 9.49.5.09.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.605-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836a9.59 9.59 0 0 1 2.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.577.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
-          GitHub
-        </a>
-      </div>
-    </nav>
-  </header>
-
-  <div class="max-w-6xl mx-auto px-6 py-14 flex gap-12">
-
-    <!-- Sidebar TOC -->
-    <aside class="hidden lg:block w-56 flex-shrink-0 sticky top-24 self-start">
-      <p class="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-4 px-3">Contents</p>
-      <nav id="toc" class="space-y-0.5"></nav>
-    </aside>
-
-    <main class="flex-1 min-w-0">
-
-      <div class="mb-10">
-        <p class="font-mono text-blue-500 text-xs tracking-widest uppercase mb-3">Legal</p>
-        <h1 style="font-family: 'Syne', sans-serif; font-weight: 800; font-size: clamp(2rem, 4vw, 3rem); letter-spacing: -0.03em; color: #f4f4f5; line-height: 1.1; margin-bottom: 1rem;">Privacy Policy</h1>
-        <div class="flex flex-wrap items-center gap-4 text-sm">
-          <span class="font-mono text-zinc-500">Effective Date: <strong class="text-zinc-400">December 1, 2024</strong></span>
-          <span class="font-mono text-zinc-500">Last Updated: <strong class="text-zinc-400">December 1, 2024</strong></span>
-        </div>
-        <p style="color: #a1a1aa; font-size: 0.95rem; line-height: 1.7; margin-top: 1.25rem; max-width: 60ch;">This Privacy Policy describes how ComicTL ("the Extension," "we," "us," or "our") handles information when you install and use the ComicTL browser extension. Please read it carefully before using the Extension.</p>
-      </div>
-
-      <!-- Skeleton -->
-      <div id="loading-skeleton" class="space-y-3">
-        <div class="loading-pulse h-4 w-3/4"></div>
-        <div class="loading-pulse h-4 w-full"></div>
-        <div class="loading-pulse h-4 w-5/6"></div>
-        <div class="loading-pulse h-4 w-2/3"></div>
-        <div class="mt-4 loading-pulse h-4 w-full"></div>
-        <div class="loading-pulse h-4 w-4/5"></div>
-      </div>
-
-      <div id="policy-content" style="display:none;"></div>
-
-    </main>
-  </div>
-
-  <footer style="border-top: 1px solid #18181b; margin-top: 4rem;">
-    <div class="max-w-6xl mx-auto px-6 py-10 flex flex-col md:flex-row items-center justify-between gap-6">
-      <div class="flex items-center gap-2.5">
-        <div class="w-6 h-6 rounded-md flex items-center justify-center" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <span style="font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.9rem; color: #71717a;">ComicTL</span>
-        <span style="color: #3f3f46; font-size: 0.7rem; font-family: 'DM Mono', monospace; margin-left: 0.5rem;">MIT License</span>
-      </div>
-      <nav class="flex items-center gap-8 text-sm">
-        <a href="index.html">Home</a>
-        <a href="https://github.com/kiuyha/ComicTL" target="_blank" rel="noopener noreferrer">GitHub</a>
-        <a href="https://github.com/kiuyha/ComicTL/releases/latest" target="_blank" rel="noopener noreferrer">Releases</a>
-        <a href="privacy.html" style="color: #60a5fa;">Privacy Policy</a>
-      </nav>
-      <p style="color: #3f3f46; font-size: 0.75rem; font-family: 'DM Mono', monospace;">&copy; 2025 ComicTL contributors</p>
-    </div>
-  </footer>
-
-  <script>
-    marked.setOptions({ breaks: false, gfm: true });
-
-    function calloutClass(text) {
-      if (text.startsWith('✅') || text.startsWith('🛡')) return 'callout-ok';
-      if (text.startsWith('⚠'))  return 'callout-warn';
-      return 'callout-info';
-    }
-
-    function slugify(t) {
-      return t.toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
-    }
-
-    function wrapIntoSections(container) {
-      const nodes = Array.from(container.childNodes);
-      container.innerHTML = '';
-
-      let section = null;
-      let count = 0;
-
-      nodes.forEach(node => {
-        if (node.nodeType === Node.TEXT_NODE && !node.textContent.trim()) return;
-
-        const isH2 = node.nodeType === 1 && node.tagName === 'H2';
-
-        if (isH2) {
-          count++;
-          section = document.createElement('div');
-          section.className = 'policy-section section-anchor';
-
-          // Extract "N. Title" pattern
-          const m = node.textContent.match(/^(\d+)\.\s+(.+)/);
-          const num = document.createElement('div');
-          num.className = 'section-number';
-          num.textContent = m ? `Section ${m[1]}` : `Section ${count}`;
-          if (m) node.textContent = m[2];
-
-          section.id = slugify(node.textContent);
-          section.appendChild(num);
-          section.appendChild(node);
-          container.appendChild(section);
-
-        } else if (section) {
-          if (node.nodeType === 1 && node.tagName === 'BLOCKQUOTE') {
-            node.classList.add(calloutClass(node.textContent.trim()));
-          }
-          section.appendChild(node);
-        } else {
-          container.appendChild(node);
+      /* Shimmer skeleton */
+      .loading-pulse {
+        background: linear-gradient(
+          90deg,
+          #27272a 25%,
+          #3f3f46 50%,
+          #27272a 75%
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite;
+        border-radius: 0.5rem;
+      }
+      @keyframes shimmer {
+        0% {
+          background-position: 200% 0;
         }
-      });
-    }
+        100% {
+          background-position: -200% 0;
+        }
+      }
+    </style>
+  </head>
+  <body class="antialiased">
+    <div class="top-bar"></div>
 
-    function buildTOC(container) {
-      const toc = document.getElementById('toc');
-      toc.innerHTML = '';
-      container.querySelectorAll('.policy-section').forEach((sec, i) => {
-        const h2 = sec.querySelector('h2');
-        if (!h2) return;
-        const a = document.createElement('a');
-        a.href = `#${sec.id}`;
-        a.className = 'toc-link';
-        a.textContent = `${i + 1}. ${h2.textContent}`;
-        toc.appendChild(a);
-      });
-    }
+    <header
+      class="sticky top-0 z-50"
+      style="
+        background: rgba(9, 9, 11, 0.9);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid rgba(39, 39, 42, 0.6);
+      "
+    >
+      <nav
+        class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between"
+      >
+        <a href="index.html" class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-md flex items-center justify-center">
+            <img
+              src="/assets/icon.png"
+              alt="ComicTL Logo"
+              width="50"
+              height="50"
+            />
+          </div>
+          <span
+            style="
+              font-family: &quot;Syne&quot;, sans-serif;
+              font-weight: 700;
+              font-size: 1.1rem;
+              color: #f4f4f5;
+              letter-spacing: -0.01em;
+            "
+            >ComicTL</span
+          >
+        </a>
+        <div class="flex items-center gap-6">
+          <a href="index.html" class="nav-link text-sm font-medium"
+            >Back to Home</a
+          >
+          <a
+            href="https://github.com/kiuyha/ComicTL"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-outline inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-lg"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.165 6.839 9.49.5.09.682-.217.682-.482 0-.237-.009-.868-.013-1.703-2.782.605-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836a9.59 9.59 0 0 1 2.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.577.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"
+              />
+            </svg>
+            GitHub
+          </a>
+        </div>
+      </nav>
+    </header>
 
-    function setupScrollSpy() {
-      const links = () => document.querySelectorAll('.toc-link');
-      const obs = new IntersectionObserver(entries => {
-        entries.forEach(e => {
-          if (e.isIntersecting) {
-            links().forEach(l => l.classList.remove('active'));
-            const a = document.querySelector(`.toc-link[href="#${e.target.id}"]`);
-            if (a) a.classList.add('active');
+    <div class="max-w-6xl mx-auto px-6 py-14 flex gap-12">
+      <!-- Sidebar TOC -->
+      <aside
+        class="hidden lg:block w-56 flex-shrink-0 sticky top-24 self-start"
+      >
+        <p
+          class="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-4 px-3"
+        >
+          Contents
+        </p>
+        <nav id="toc" class="space-y-0.5"></nav>
+      </aside>
+
+      <main class="flex-1 min-w-0">
+        <div class="mb-10">
+          <p
+            class="font-mono text-blue-500 text-xs tracking-widest uppercase mb-3"
+          >
+            Legal
+          </p>
+          <h1
+            style="
+              font-family: &quot;Syne&quot;, sans-serif;
+              font-weight: 800;
+              font-size: clamp(2rem, 4vw, 3rem);
+              letter-spacing: -0.03em;
+              color: #f4f4f5;
+              line-height: 1.1;
+              margin-bottom: 1rem;
+            "
+          >
+            Privacy Policy
+          </h1>
+          <div class="flex flex-wrap items-center gap-4 text-sm">
+            <span class="font-mono text-zinc-500"
+              >Effective Date:
+              <strong class="text-zinc-400">December 1, 2024</strong></span
+            >
+            <span class="font-mono text-zinc-500"
+              >Last Updated:
+              <strong class="text-zinc-400">December 1, 2024</strong></span
+            >
+          </div>
+          <p
+            style="
+              color: #a1a1aa;
+              font-size: 0.95rem;
+              line-height: 1.7;
+              margin-top: 1.25rem;
+              max-width: 60ch;
+            "
+          >
+            This Privacy Policy describes how ComicTL ("the Extension," "we,"
+            "us," or "our") handles information when you install and use the
+            ComicTL browser extension. Please read it carefully before using the
+            Extension.
+          </p>
+        </div>
+
+        <!-- Skeleton -->
+        <div id="loading-skeleton" class="space-y-3">
+          <div class="loading-pulse h-4 w-3/4"></div>
+          <div class="loading-pulse h-4 w-full"></div>
+          <div class="loading-pulse h-4 w-5/6"></div>
+          <div class="loading-pulse h-4 w-2/3"></div>
+          <div class="mt-4 loading-pulse h-4 w-full"></div>
+          <div class="loading-pulse h-4 w-4/5"></div>
+        </div>
+
+        <div id="policy-content" style="display: none"></div>
+      </main>
+    </div>
+
+    <footer style="border-top: 1px solid #18181b; margin-top: 4rem">
+      <div
+        class="max-w-6xl mx-auto px-6 py-10 flex flex-col md:flex-row items-center justify-between gap-6"
+      >
+        <div class="flex items-center gap-2.5">
+          <div
+            class="w-6 h-6 rounded-md flex items-center justify-center"
+            style="background: linear-gradient(135deg, #3b82f6, #2563eb)"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"
+                stroke="white"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"
+                stroke="white"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </div>
+          <span
+            style="
+              font-family: &quot;Syne&quot;, sans-serif;
+              font-weight: 700;
+              font-size: 0.9rem;
+              color: #71717a;
+            "
+            >ComicTL</span
+          >
+          <span
+            style="
+              color: #3f3f46;
+              font-size: 0.7rem;
+              font-family: &quot;DM Mono&quot;, monospace;
+              margin-left: 0.5rem;
+            "
+            >MIT License</span
+          >
+        </div>
+        <nav class="flex items-center gap-8 text-sm">
+          <a href="index.html">Home</a>
+          <a
+            href="https://github.com/kiuyha/ComicTL"
+            target="_blank"
+            rel="noopener noreferrer"
+            >GitHub</a
+          >
+          <a
+            href="https://github.com/kiuyha/ComicTL/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Releases</a
+          >
+          <a href="privacy.html" style="color: #60a5fa">Privacy Policy</a>
+        </nav>
+        <p
+          style="
+            color: #3f3f46;
+            font-size: 0.75rem;
+            font-family: &quot;DM Mono&quot;, monospace;
+          "
+        >
+          &copy; 2025 ComicTL contributors
+        </p>
+      </div>
+    </footer>
+
+    <script>
+      marked.setOptions({ breaks: false, gfm: true });
+
+      function calloutClass(text) {
+        if (text.startsWith("✅") || text.startsWith("🛡")) return "callout-ok";
+        if (text.startsWith("⚠")) return "callout-warn";
+        return "callout-info";
+      }
+
+      function slugify(t) {
+        return t
+          .toLowerCase()
+          .replace(/[^\w\s-]/g, "")
+          .trim()
+          .replace(/\s+/g, "-");
+      }
+
+      function wrapIntoSections(container) {
+        const nodes = Array.from(container.childNodes);
+        container.innerHTML = "";
+
+        let section = null;
+        let count = 0;
+
+        nodes.forEach((node) => {
+          if (node.nodeType === Node.TEXT_NODE && !node.textContent.trim())
+            return;
+
+          const isH2 = node.nodeType === 1 && node.tagName === "H2";
+
+          if (isH2) {
+            count++;
+            section = document.createElement("div");
+            section.className = "policy-section section-anchor";
+
+            // Extract "N. Title" pattern
+            const m = node.textContent.match(/^(\d+)\.\s+(.+)/);
+            const num = document.createElement("div");
+            num.className = "section-number";
+            num.textContent = m ? `Section ${m[1]}` : `Section ${count}`;
+            if (m) node.textContent = m[2];
+
+            section.id = slugify(node.textContent);
+            section.appendChild(num);
+            section.appendChild(node);
+            container.appendChild(section);
+          } else if (section) {
+            if (node.nodeType === 1 && node.tagName === "BLOCKQUOTE") {
+              node.classList.add(calloutClass(node.textContent.trim()));
+            }
+            section.appendChild(node);
+          } else {
+            container.appendChild(node);
           }
         });
-      }, { rootMargin: '-20% 0px -70% 0px' });
+      }
 
-      document.querySelectorAll('.policy-section').forEach(s => obs.observe(s));
-    }
-
-    async function init() {
-      try {
-        const md = await fetch('privacy.md').then(r => {
-          if (!r.ok) throw new Error(r.status);
-          return r.text();
+      function buildTOC(container) {
+        const toc = document.getElementById("toc");
+        toc.innerHTML = "";
+        container.querySelectorAll(".policy-section").forEach((sec, i) => {
+          const h2 = sec.querySelector("h2");
+          if (!h2) return;
+          const a = document.createElement("a");
+          a.href = `#${sec.id}`;
+          a.className = "toc-link";
+          a.textContent = `${i + 1}. ${h2.textContent}`;
+          toc.appendChild(a);
         });
+      }
 
-        const content = document.getElementById('policy-content');
-        content.innerHTML = marked.parse(md);
+      function setupScrollSpy() {
+        const links = () => document.querySelectorAll(".toc-link");
+        const obs = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((e) => {
+              if (e.isIntersecting) {
+                links().forEach((l) => l.classList.remove("active"));
+                const a = document.querySelector(
+                  `.toc-link[href="#${e.target.id}"]`,
+                );
+                if (a) a.classList.add("active");
+              }
+            });
+          },
+          { rootMargin: "-20% 0px -70% 0px" },
+        );
 
-        // Drop the h1 and opening meta paragraph — already in the static header
-        const h1 = content.querySelector('h1');
-        if (h1) h1.remove();
-        const firstP = content.querySelector('p');
-        if (firstP && /Effective Date/.test(firstP.textContent)) firstP.remove();
+        document
+          .querySelectorAll(".policy-section")
+          .forEach((s) => obs.observe(s));
+      }
 
-        wrapIntoSections(content);
-        buildTOC(content);
-        setupScrollSpy();
+      async function init() {
+        try {
+          const md = await fetch("privacy.md").then((r) => {
+            if (!r.ok) throw new Error(r.status);
+            return r.text();
+          });
 
-        document.getElementById('loading-skeleton').style.display = 'none';
-        content.style.display = '';
+          const content = document.getElementById("policy-content");
+          content.innerHTML = marked.parse(md);
 
-      } catch (err) {
-        document.getElementById('loading-skeleton').innerHTML =
-          `<p style="color:#ef4444;font-family:'DM Mono',monospace;font-size:0.85rem;">
+          // Drop the h1 and opening meta paragraph — already in the static header
+          const h1 = content.querySelector("h1");
+          if (h1) h1.remove();
+          const firstP = content.querySelector("p");
+          if (firstP && /Effective Date/.test(firstP.textContent))
+            firstP.remove();
+
+          wrapIntoSections(content);
+          buildTOC(content);
+          setupScrollSpy();
+
+          document.getElementById("loading-skeleton").style.display = "none";
+          content.style.display = "";
+        } catch (err) {
+          document.getElementById("loading-skeleton").innerHTML =
+            `<p style="color:#ef4444;font-family:'DM Mono',monospace;font-size:0.85rem;">
             Could not load privacy policy.
             <a href="https://github.com/kiuyha/ComicTL/blob/main/privacy.md"
                style="color:#60a5fa;" target="_blank">View on GitHub instead.</a>
           </p>`;
-        console.error('privacy.md load error:', err);
+          console.error("privacy.md load error:", err);
+        }
       }
-    }
 
-    document.addEventListener('DOMContentLoaded', init);
-  </script>
-
-</body>
+      document.addEventListener("DOMContentLoaded", init);
+    </script>
+  </body>
 </html>
