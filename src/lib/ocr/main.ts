@@ -48,9 +48,10 @@ export async function textRecognise(
   if (!session) {
     session = await downloadArtifactHF(
       DefaultConfig.ocrRepo,
-      `languages/${langGroup}/rec.onnx`,
+      DefaultConfig.ocrModelPath(langGroup),
       autoUpdate,
     );
+    
     currentLangGroup = langGroup;
   }
 
@@ -58,7 +59,7 @@ export async function textRecognise(
     const dictText = await (
       await downloadArtifactHF(
         DefaultConfig.ocrRepo,
-        `languages/${langGroup}/dict.txt`,
+        DefaultConfig.ocrDictPath(langGroup),
       )
     ).text();
     charset = buildCharset(dictText);

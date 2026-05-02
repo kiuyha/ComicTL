@@ -26,6 +26,7 @@ export default defineConfig({
       {
         resources: [
           "/offscreen.html",
+          "/setup.html",
           "/content-scripts/*",
           "/*.wasm",
           "/*.mjs",
@@ -47,9 +48,11 @@ export default defineConfig({
       firefox: "/usr/bin/firefox",
     },
     chromiumArgs: [
-      '--enable-unsafe-webgpu',
-      '--enable-features=Vulkan',
-      '--user-data-dir=./.wxt/chrome-data'
-    ]
+      "--enable-unsafe-webgpu",
+      "--ozone-platform=x11",
+      "--use-angle=vulkan",
+      "--enable-features=Vulkan,VulkanFromANGLE",
+      "--user-data-dir=./.wxt/chrome-data",
+    ],
   },
 });

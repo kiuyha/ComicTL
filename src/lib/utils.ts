@@ -17,22 +17,26 @@ export async function fetchAsBase64(url: string) {
 
 export function downloadArtifactHF(
   repoID: string,
-  modelPath: `${string}.onnx`,
+  path: `${string}.onnx`,
   autoUpdate?: boolean,
+  noReturn?: boolean,
 ): Promise<ort.InferenceSession>;
 
 export function downloadArtifactHF(
   repoID: string,
-  modelPath: string,
+  path: string,
   autoUpdate?: boolean,
+  noReturn?: boolean,
 ): Promise<Response>;
 
 export async function downloadArtifactHF(
   repoID: string,
-  modelPath: string,
+  path: string,
   autoUpdate?: boolean,
-): Promise<ort.InferenceSession | Response> {
-  const url = `https://huggingface.co/${repoID}/resolve/main/${modelPath}`;
+  noReturn?: boolean,
+): Promise<ort.InferenceSession | Response | undefined> {
+  console.log(`Downloading ${repoID}/${path}`);
+  const url = `https://huggingface.co/${repoID}/resolve/main/${path}`;
   const cache = await caches.open(repoID);
 
   let response = await cache.match(url);
@@ -61,11 +65,38 @@ export async function downloadArtifactHF(
     await cache.put(url, response.clone());
   }
 
-  if (modelPath.endsWith(".onnx")) {
+  if (noReturn) return;
+
+  if (path.endsWith(".onnx")) {
     return ort.InferenceSession.create(await response.arrayBuffer(), {
       executionProviders: ["webnn", "webgpu", "wasm"],
     });
   } else {
     return response;
+  }
+}
+
+export async function openSetupTab(modelId?: string) {
+  let targetUrl = browser.runtime.getURL("/setup.html");
+  if (modelId) {
+    targetUrl += `?model=${modelId}`;
+  }
+
+  // Check if any tab is already open with the setup page
+  const existingTabs = await browser.tabs.query({
+    url: browser.runtime.getURL("/setup.html") + "*",
+  });
+
+  if (existingTabs.length > 0) {
+    const tab = existingTabs[0];
+
+    await browser.tabs.update(tab.id, {
+      active: true,
+      ...(modelId ? { url: targetUrl } : {}),
+    });
+
+    await browser.windows.update(tab.windowId, { focused: true });
+  } else {
+    await browser.tabs.create({ url: targetUrl });
   }
 }

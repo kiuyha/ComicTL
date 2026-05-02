@@ -28,7 +28,7 @@ export async function detectTextBubble(
   if (!session) {
     session = await downloadArtifactHF(
       DefaultConfig.detectionModelRepo,
-      `onnx/${requestedModel}.onnx`,
+      DefaultConfig.detectionModelPath(requestedModel),
       autoUpdate,
     );
     currentModelName = requestedModel;

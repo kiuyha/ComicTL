@@ -22,13 +22,6 @@
     TriangleAlert,
   } from "lucide-svelte";
   import { DefaultConfig } from "@/lib/configs";
-  import { untrack } from "svelte";
-
-  let {
-    seriesName,
-  }: {
-    seriesName: string;
-  } = $props();
 
   let isFirstRun = $state(true);
   let activeTab = $state("home");
@@ -37,24 +30,16 @@
   let geminiKey = $state("");
   let showKey = $state(false);
   let geminiModel = $state(DefaultConfig.geminiModels[0].id);
-  let currentMode = $state(DefaultConfig.currentMode);
   let detectionModel = $state(DefaultConfig.detectionModels[0].id);
   let ocrMinConfidence = $state(DefaultConfig.ocrMinConfidence);
   let sourceLang = $state(DefaultConfig.sourceLang);
   let targetLang = $state(DefaultConfig.targetLang);
   let activeDropdown = $state<"source" | "target" | null>(null);
   let searchQuery = $state("");
+
   let detectionAutoUpdate = $state(true);
   let detectionMinConfidence = $state(0.5);
-  let seriesContext = $state<SeriesContext>({
-    seriesName,
-    summary: "",
-    dictionary: "",
-    lastChapterId: null,
-    lastPageIndex: null,
-    recentHistory: [],
-    translatedCount: 0,
-  });
+  let currentMode = $state(DefaultConfig.currentMode);
   let activeDevice = $state(DefaultConfig.activeDevice);
   let loadingSettings = $state(true);
   let hasApiKey = $derived(geminiKey.trim().length > 0);
@@ -72,12 +57,6 @@
     version: "",
     url: "",
   });
-  let prevDetectionModel = untrack(() => detectionModel);
-  let prevSourceLang = untrack(() => sourceLang);
-  let prevMode = untrack(() => currentMode);
-
-  let isFetchingDetection = $state(false);
-  let isFetchingOCR = $state(false);
 
   const TABS = [
     { id: "home", label: "Home", icon: Zap },
@@ -175,8 +154,7 @@
 
     isFirstRun = saved["local:is-first-run"] ?? isFirstRun;
     shareData = saved["sync:share-data"] ?? shareData;
-    detectionAutoUpdate =
-      saved["sync:detection-auto-update"] ?? detectionAutoUpdate;
+    detectionAutoUpdate = saved["sync:detection-auto-update"] ?? detectionAutoUpdate;
     detectionMinConfidence =
       saved["sync:detection-min-confidence"] ?? detectionMinConfidence;
     geminiKey = saved["sync:gemini-key"] ?? geminiKey;
@@ -226,69 +204,27 @@
   }
 
   $effect(() => {
-    if (loadingSettings) return;
-    [
-      isFirstRun,
-      shareData,
-      detectionAutoUpdate,
-      detectionMinConfidence,
-      geminiKey,
-      geminiModel,
-      sourceLang,
-      targetLang,
-      detectionModel,
-      currentMode,
-      seriesContext.seriesName,
-      seriesContext.summary,
-      seriesContext.dictionary,
-      textFont,
-      customFonts.length,
-    ];
-    debouncedSave();
+    if (!loadingSettings) {
+      // touch all state to subscribe, then debounce the actual writes
+      [
+        isFirstRun,
+        shareData,
+        detectionAutoUpdate,
+        detectionMinConfidence,
+        geminiKey,
+        geminiModel,
+        sourceLang,
+        targetLang,
+        detectionModel,
+        currentMode,
+        seriesContext.seriesName,
+        seriesContext.summary,
+        seriesContext.dictionary,
+        textFont,
+        customFonts.length,
+      ];
 
-    if (detectionModel !== prevDetectionModel) {
-      prevDetectionModel = detectionModel;
-      isFetchingDetection = true;
-
-      browser.runtime
-        .sendMessage({
-          type: "PREFETCH_MODEL",
-          data: {
-            type: "detection",
-            data: detectionModel,
-          },
-        })
-        .finally(() => (isFetchingDetection = false));
-    }
-
-    const switchedToLocal = currentMode !== prevMode && currentMode === "local";
-    const currentLangGroup =
-      DefaultConfig.ocrLangGroupMap[sourceLang] ?? "latin";
-    const prevLangGroup =
-      DefaultConfig.ocrLangGroupMap[prevSourceLang] ?? "latin";
-    const langGroupChangedInLocal =
-      currentLangGroup !== prevLangGroup && currentMode === "local";
-
-    if (
-      switchedToLocal ||
-      (langGroupChangedInLocal && sourceLang !== "Auto-Detect")
-    ) {
-      prevSourceLang = sourceLang;
-      prevMode = currentMode;
-      isFetchingOCR = true;
-
-      browser.runtime
-        .sendMessage({
-          type: "PREFETCH_MODEL",
-          data: {
-            type: "ocr",
-            data: currentLangGroup,
-          },
-        })
-        .finally(() => (isFetchingOCR = false));
-    } else {
-      prevSourceLang = sourceLang;
-      prevMode = currentMode;
+      debouncedSave();
     }
   });
 
@@ -591,9 +527,6 @@
                 onclick={() => openDropdown("source")}
                 class="flex-1 flex items-center justify-center gap-2 p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-lg transition-colors text-sm font-semibold"
               >
-                {#if isFetchingOCR}
-                  <LoaderCircle size={14} class="animate-spin text-blue-500" />
-                {/if}
                 {sourceLang}
                 <ChevronDown size={14} class="opacity-50" />
               </button>
@@ -744,21 +677,11 @@
             >
             <div class="grid grid-cols-3 gap-3 pt-2">
               <div class="flex flex-col space-y-1.5">
-                <div class="flex items-center justify-between">
-                  <label
-                    for="detection-model"
-                    class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1"
-                  >
-                    Model
-                  </label>
-                  {#if isFetchingDetection}
-                    <LoaderCircle
-                      size={12}
-                      class="animate-spin text-blue-500 mr-1"
-                    />
-                  {/if}
-                </div>
-
+                <label
+                  for="detection-model"
+                  class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1"
+                  >Model</label
+                >
                 <select
                   id="detection-model"
                   bind:value={detectionModel}

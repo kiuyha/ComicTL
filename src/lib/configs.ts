@@ -42,6 +42,7 @@ export const DefaultConfig = {
   detectionAutoUpdate: true,
   detectionModelRepo:
     import.meta.env.WXT_DETECTION_MODEL_REPO || "Kiuyha/Manga-Bubble-YOLO",
+  detectionModelPath: (model: string): `${string}.onnx` => `onnx/${model}.onnx`,
 
   ocrAutoUpdate: true,
   ocrMinConfidence: 0.75,
@@ -49,6 +50,9 @@ export const DefaultConfig = {
   ocrBatchSize: 4,
   ocrRecImgHeight: 48,
   ocrRepo: import.meta.env.WXT_OCR_MODEL_REPO || "Kiuyha/paddleocr-onnx",
+  ocrModelPath: (langGroup: string): `${string}.onnx` =>
+    `languages/${langGroup}/rec.onnx`,
+  ocrDictPath: (langGroup: string) => `languages/${langGroup}/dict.txt`,
 
   geminiTemperature: 0.3,
   minTranslations: 5, // number of translations per series before resetting context
@@ -64,18 +68,8 @@ export const DefaultConfig = {
     { id: "yolo26s", label: "YOLO26-Small" },
   ],
   llmModels: {
-    Fastest: [
-      "Qwen2.5-0.5B-Instruct-q4f16_1-MLC", // Ideal: Low VRAM (944.62 MB), needs modern GPU
-      "Qwen2.5-0.5B-Instruct-q4f32_1-MLC", // Fallback: Low VRAM (1060.2 MB), high compatibility
-    ],
-    Balanced: [
-      "Llama-3.2-3B-Instruct-q4f16_1-MLC", // Ideal: Medium VRAM (2263.69 MB)
-      "Llama-3.2-3B-Instruct-q4f32_1-MLC", // Fallback: Medium VRAM (2951.51 MB)
-    ],
-    HighQuality: [
-      "Llama-3.1-8B-Instruct-q4f16_1-MLC", // Ideal: High VRAM (4598.34 MB)
-      "Llama-3.1-8B-Instruct-q4f32_1-MLC", // Fallback: High VRAM (6101.01 MB)
-    ],
+    Balanced: "Qwen3-4B-q4f16_1-MLC", // Medium VRAM (3431.59 MB)
+    HighQuality: "Qwen3-8B-q4f16_1-MLC", // High VRAM (5695.78 MB)
   },
   availableLanguages: [
     "Auto-Detect",
