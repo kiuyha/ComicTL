@@ -223,8 +223,6 @@ async function runBatches(
 
           let newText = decoded.text.trim();
 
-          console.log(decoded);
-
           if (target.text.endsWith("-")) {
             target.text = target.text.slice(0, -1) + newText;
           } else {

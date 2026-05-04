@@ -56,9 +56,6 @@ export function sliceImageDataIntoLines(imageData: ImageData): ImageData[] {
   }
   const pixelThreshold = Math.max(3, width * 0.02);
   
-  console.log(`[slicer] ${width}x${height} bgBrightness=${bgBrightness.toFixed(1)} threshold=${threshold.toFixed(1)} pixelThreshold=${pixelThreshold}`);
-  console.log(`[slicer] rowIntensities:`, rowIntensities.map((v, y) => `y${y}:${v}`).join(' '));
-  
   const MIN_CONFIRM = 2;
   const lines: ImageData[] = [];
   let inTextLine = false;

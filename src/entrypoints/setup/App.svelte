@@ -348,7 +348,7 @@
                     style="width: {llmProgress}%"
                   ></div>
                 </div>
-                <p class="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+                <p class="text-xs text-zinc-500 dark:text-zinc-400">
                   {llmProgressText}
                 </p>
               </div>

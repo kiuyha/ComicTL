@@ -44,7 +44,9 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
             seriesContext,
             llmModel,
             llmTemperature,
-          );
+          )
+            .then(sendResponse)
+            .catch((err) => sendResponse({ error: err.message }));
         })
         .catch((err) => sendResponse({ error: err.message }));
     } else {

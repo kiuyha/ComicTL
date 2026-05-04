@@ -63,13 +63,34 @@ ${
     currentlyLoadedModel = model;
   }
 
-  const reply = await globalEngine.chat.completions.create({
+  const reply = await globalEngine.chatCompletion({
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
     temperature,
-    response_format: { type: "json_object" },
+    response_format: {
+      type: "json_object",
+      schema: JSON.stringify({
+        type: "object",
+        properties: {
+          translations: { type: "array", items: { type: "string" } },
+          ...(needsContext
+            ? {
+                context: {
+                  type: "object",
+                  properties: {
+                    summary: { type: "string" },
+                    dictionary: { type: "string" },
+                  },
+                  required: ["summary", "dictionary"],
+                },
+              }
+            : {}),
+        },
+        required: ["translations", ...(needsContext ? ["context"] : [])],
+      }),
+    },
   });
 
   const resultText = reply.choices[0].message.content as string;
