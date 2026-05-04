@@ -1,129 +1,197 @@
 # ComicTL
 
-A browser extension that translates manga pages in-place. Click a page, adjust the detected speech bubbles if needed, confirm, and the translated text gets painted directly onto the image.
+Translate manga in your browser. Detection runs on your machine, OCR runs on your machine, translation runs on your machine. Nothing leaves your browser unless you want it to.
 
-This is cloud mode only. Local mode (no API key, fully on-device) is planned for v1.0.
-<img width="800" height="500" style="width: 100%;" alt="Demo" src="https://github.com/user-attachments/assets/9aca9643-6a35-401e-8e4d-f28cf2f07b4c" />
+**Website:** [comictl.kiuyha.my.id](https://comictl.kiuyha.my.id) | **Releases:** [Latest](https://github.com/kiuyha/ComicTL/releases/latest)
+
+![Demo](https://github.com/user-attachments/assets/9aca9643-6a35-401e-8e4d-f28cf2f07b4c)
 
 ---
 
-## How it works
+## Two Modes, One Pipeline
 
+**Local Mode** runs everything on-device. YOLO26 finds the bubbles, PaddleOCR reads the text, and Qwen3 via WebLLM translates it on WebGPU. No API key, no account, no uploads.
+
+**Cloud Mode** sends the annotated image to Gemini, which handles both OCR and translation in one shot. Your key goes straight from your browser to Google. It never touches a proxy or middleman server.
+
+Either way, the translated text gets painted directly onto the page. Toggle back to the original any time.
+
+---
+
+## How It Works
 
 ```mermaid
 graph TD
-    Img[Manga Page] --> Detect[YOLO Detection - runs locally]
-    Detect --> Boxes[Bounding Boxes]
-    Boxes --> Refine[Review and Adjust in Editor]
-    Refine --> Annotate[Number Each Bubble]
-    Annotate --> Prompt[Send Annotated Image]
-    Prompt --> Gemini[Gemini 3.1 Flash API]
-    Gemini --> Text[Translated Text per Bubble]
-    Text --> Paint[Repaint Bubbles on Canvas]
+    Img[Manga Page] --> Detect
+
+    subgraph offscreen ["Offscreen Document (isolated inference thread)"]
+        Detect["YOLO Detection
+ONNX Runtime Web"]
+        Detect --> Boxes[Bounding Boxes]
+    end
+
+    Boxes --> Refine[Review and Adjust Boxes in Editor]
+    Refine --> Annotate["Number Each Bubble
+right-to-left reading order"]
+    Annotate --> Mode{Pipeline Mode?}
+
+    Mode -->|Cloud| CloudImg[Annotated Image]
+    CloudImg --> Gemini["Gemini API
+OCR + Translation in one call"]
+    Gemini --> Text
+
+    Mode -->|Local| OCR["PaddleOCR ONNX
+on-device text extraction"]
+    OCR --> Raw[Raw Text per Bubble]
+    Raw --> Ctx["Series Context
+title + summary + dictionary
++ last 5 translations"]
+    Ctx --> LLM["WebLLM - Qwen3 4B or 8B
+WebGPU accelerated"]
+    LLM --> Text[Translated Text per Bubble]
+
+    Text --> Inpaint[Inpaint Original Bubble Region]
+    Inpaint --> Paint["Repaint with Translated Text
+custom font + auto-fit sizing"]
     Paint --> Result[Translated Page]
 ```
 
-Detection runs entirely on your machine using a YOLO ONNX model. No image is sent anywhere during detection. After you confirm the boxes, the annotated image is sent to the Gemini API for translation. The translated text is then painted back onto the original page using a canvas overlay.
-
-No account needed. No login. Just a Gemini API key.
-
----
-
-## Requirements
-
-- Chrome or Firefox
-- A Gemini API key, available for free at [aistudio.google.com](https://aistudio.google.com)
-
----
-
-## Installation
-
-Go to the [latest release page](https://github.com/kiuyha/ComicTL/releases/latest) and download the zip for your browser. No account or login is required to use the extension.
-
-### Chrome
-
-1. Download `comic-tl-<version>-chrome.zip` and unzip it anywhere on your machine
-2. Open Chrome and go to `chrome://extensions`
-3. Enable **Developer mode** using the toggle in the top right
-4. Click **Load unpacked** and select the unzipped folder
-5. The ComicTL icon will appear in your extensions bar
-
-### Firefox
-
-1. Download `comic-tl-<version>-firefox.zip` and unzip it anywhere on your machine
-2. Open Firefox and go to `about:debugging#/runtime/this-firefox`
-3. Click **Load Temporary Add-on**
-4. Select any file inside the unzipped folder
-5. The ComicTL icon will appear in your toolbar
-
-> Note: Firefox does not persist temporary add-ons across restarts. A signed Firefox release is planned for a future version.
-
-### First-time setup
-
-Open the extension popup after installing and go to **Settings**. Paste your Gemini API key into the API Key field. Switch the mode from Local to Cloud in the Home tab. You are ready to translate.
-
----
-
-## Usage
-
-1. Open any manga page in your browser
-2. Click the ComicTL icon and click **Translate Now**
-3. The overlay appears and runs bubble detection automatically
-4. Review the numbered bounding boxes. You can drag to move them, resize by the corner handles, add new ones, or delete unwanted ones
-5. Click **Confirm** to send to Gemini and paint the translation onto the page
-6. Click **Original** to toggle between the translated and original image at any time
+Detection never sends an image anywhere. The YOLO model runs in a dedicated offscreen document, keeping inference off the main page thread and away from the popup UI.
 
 ---
 
 ## Features
 
-**Bubble editor**
-Detected boxes are numbered in manga reading order (right to left, top to bottom). You can drag, resize, add, or delete boxes before translating. Undo and redo are supported.
+**Full local pipeline.** YOLO26-Nano runs via ONNX Runtime Web. PaddleOCR extracts text on-device. Qwen3 4B or 8B translates via WebLLM with WebGPU acceleration. After the first model download, the whole pipeline works offline.
 
-**Series context**
-Set a title, summary, and custom dictionary per series in the Context tab. These are sent to Gemini alongside the image so character names and terminology stay consistent across chapters.
+**Cloud option.** Point ComicTL at any Gemini model you have access to. The annotated image goes directly from your browser to the Gemini API. Good for when you want higher accuracy or your machine does not have a GPU.
 
-**Custom fonts**
-Choose from bundled fonts (Noto Sans, Bangers, Comic Neue) or drag and drop your own TTF, OTF, or WOFF file directly into the Settings tab. The selected font is used when painting translated text.
+**Bubble editor.** Detected boxes are numbered in manga reading order (right to left, top to bottom). Drag, resize, add, delete, undo, redo before you commit to translating.
 
-**Translation history**
-The last five translations for a series are stored locally and used as context for subsequent pages, which helps Gemini keep names and tone consistent.
+**Series context.** Set a title, plot summary, and custom glossary per series. The last five translations get included automatically so character names and terminology stay consistent across chapters.
 
-**Anonymous data sharing**
-Opt in during onboarding to share bounding box coordinates when you manually adjust boxes. This data is used to improve the detection model. No images or translated text are ever sent.
+**Site adapters.** ComicTL matches the current URL against a list of community-written regex rules to extract the series name, chapter ID, and page index. If your site is not covered, the extension can generate a rule for it using whichever AI you have active. You can also write one manually in about three minutes and submit a PR. More on this below.
+
+**Custom fonts.** Three fonts ship with the extension (Noto Sans, Bangers, Comic Neue). Drop any TTF, OTF, or WOFF file into the Settings tab to use your own.
+
+**Opt-in improvement data.** When you correct a bounding box, ComicTL can send the adjusted coordinates to help retrain the detection model. No images, no text, just coordinates. This is opt-in during onboarding and can be turned off at any time.
 
 ---
 
-## Detection model
+## Installation
 
-The bubble detector is a custom YOLO26 model trained on 5,595 manga pages from Manga109-s and MangaDex (English and Vietnamese). It runs locally in an offscreen document via ONNX Runtime Web, so nothing is sent to any server during detection.
+Download the zip for your browser from the [releases page](https://github.com/kiuyha/ComicTL/releases/latest).
 
-Two model sizes are available and can be switched in Settings:
+### Chrome
+
+1. Download `comic-tl-<version>-chrome.zip` and unzip it anywhere
+2. Open `chrome://extensions`
+3. Enable **Developer mode** (toggle in the top right)
+4. Click **Load unpacked** and select the unzipped folder
+
+### Firefox
+
+1. Download `comic-tl-<version>-firefox.zip` and unzip it
+2. Open `about:debugging#/runtime/this-firefox`
+3. Click **Load Temporary Add-on**
+4. Select any file inside the unzipped folder
+
+> Firefox temporary add-ons do not survive a browser restart. A signed Firefox release is planned for a future version.
+
+### First-time setup
+
+Open the extension popup and go to **Settings**.
+
+- **Cloud Mode:** paste your Gemini API key (free at [aistudio.google.com](https://aistudio.google.com)), then set the mode to Cloud in the Home tab.
+- **Local Mode:** select Local in the Home tab and let the model weights download once. Roughly 3-6 GB depending on which LLM you pick.
+
+---
+
+## Quick Start
+
+1. Open any manga page in Chrome or Firefox
+2. Click the ComicTL icon, or right-click the page and select **Translate Image**
+3. The overlay opens and runs bubble detection automatically
+4. Adjust any boxes that were missed or drawn wrong
+5. Click **Confirm**
+6. Read
+
+---
+
+## Adding Site Support (Pull Requests Welcome)
+
+ComicTL figures out the series name, chapter ID, and page index for each URL using a small array of regex rules in [`src/lib/adapters.ts`](src/lib/adapters.ts). Most manga sites are not in that list yet.
+
+Adding one is the shortest contribution you can make to this project, and it helps everyone who reads on that site.
+
+### What a rule looks like
+
+```typescript
+// src/lib/adapters.ts
+
+// COMMUNITY RULES -- PULL REQUESTS WELCOME!
+// To add a new site, add a new object to this array.
+export const COMMUNITY_RULES: SiteRule[] = [
+  {
+    id: "mangadex",
+    domain: "mangadex.org",
+    seriesName: {
+      regex: "^(?:.*?\\|\\s*)?(?:(?:Chapter|Vol)[^\\-]+\\-\\s*)?(.*?)\\s*\\-\\s*MangaDex",
+      source: "title",     // extract from document.title
+    },
+    chapterId: {
+      regex: "\\/chapter\\/([^/]+)",
+      source: "path",      // extract from window.location.pathname
+    },
+    pageIndex: {
+      regex: "\\/(\\d+)\\/?$",
+      source: "path",
+    },
+  },
+  // your rule goes here
+];
+```
+
+Each rule needs three fields: `seriesName`, `chapterId`, and `pageIndex`. Each field names a source (`"title"` or `"path"`) and a regex with one capturing group that isolates the value you want.
+
+### You do not need to write the regex by hand
+
+Open any chapter on the site you want to support, click the ComicTL icon, and use the **AI rule generator** in Settings. It reads the current page title and URL, sends them to whichever AI you have active (Local or Cloud), and returns a draft rule you can paste straight into the array.
+
+The one rule: the regex has to work for any manga on that site, not just the one you tested on. The generator is prompted to handle this, but check the output before submitting.
+
+### Submitting
+
+1. Fork the repo
+2. Add your object to `COMMUNITY_RULES` in `src/lib/adapters.ts`
+3. Open a PR with the site name in the title
+
+If you are new to open source, this is a good starting point. The format is small, the file is self-contained, and there is no build step required to test the regex.
+
+---
+
+## Detection Model
+
+The bubble detector is a custom YOLO26 model trained on 5,595 manga pages from Manga109-s and MangaDex. It runs locally in the offscreen document via ONNX Runtime Web.
 
 | Model | Precision | Recall | mAP@50 | mAP@50-95 | Params |
 |---|---|---|---|---|---|
 | YOLO26-Nano (default) | 0.929 | 0.863 | 0.947 | 0.765 | 2.4M |
 | YOLO26-Small | 0.937 | 0.893 | 0.961 | 0.802 | 9.5M |
 
-The Nano model is the default. It is fast enough for real-time use and accurate enough for most manga. The Small model is more accurate on dense or small text but takes roughly 2.5x longer to run.
-
-Model weights are hosted on Hugging Face: [Kiuyha/Manga-Bubble-YOLO](https://huggingface.co/Kiuyha/Manga-Bubble-YOLO)
+Nano is fast enough for interactive use and handles most manga without issues. Small is more accurate on pages with dense or small text but takes roughly 2.5x longer to run. Weights are on Hugging Face: [Kiuyha/Manga-Bubble-YOLO](https://huggingface.co/Kiuyha/Manga-Bubble-YOLO).
 
 ### Detection settings
 
-All detection settings are configurable in the **Settings** tab of the popup.
-
-| Setting | Description |
-|---|---|
-| Model | Switch between YOLO26-Nano and YOLO26-Small |
-| Min Confidence | Boxes below this threshold are discarded (default 0.5, range 0 to 1) |
-| Auto-Update | Automatically download new model weights when a newer version is available |
-
-Lowering the confidence threshold catches more bubbles but increases false positives. Raising it reduces noise but may miss smaller or lower-contrast text regions.
+| Setting | Default | Notes |
+|---|---|---|
+| Model | YOLO26-Nano | Switch to Small for dense or small-text pages |
+| Min Confidence | 0.5 | Lower catches more bubbles but increases false positives |
+| Auto-Update | On | Downloads new weights automatically when available |
 
 ---
 
-## Tech stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -131,22 +199,21 @@ Lowering the confidence threshold catches more bubbles but increases false posit
 | UI | [Svelte 5](https://svelte.dev) with runes |
 | Language | TypeScript |
 | Styling | Tailwind CSS |
-| Detection | [YOLO26 ONNX](https://huggingface.co/Kiuyha/Manga-Bubble-YOLO), runs in an offscreen document |
-| Translation | Gemini 3.1 Flash via REST API |
+| Bubble detection | YOLO26 ONNX, runs in offscreen document via ONNX Runtime Web |
+| On-device OCR | PaddleOCR ONNX |
+| On-device translation | [WebLLM](https://webllm.mlc.ai/) |
+| Cloud translation | Gemini API via REST |
 | Storage | WXT storage (wraps chrome.storage) |
 | Build | Bun |
-| Data pipeline | Supabase (bbox submissions) + Google Drive (archive) |
-
-WXT handles the cross-browser build output, manifest generation, and content script injection. Svelte 5 runes are used throughout for fine-grained reactivity without a virtual DOM. The YOLO model runs inside a dedicated offscreen document so it does not block the page.
+| Telemetry | Supabase (opt-in bbox coordinates only) |
 
 ---
 
-## Building from source
+## Building from Source
 
 Requires [Bun](https://bun.sh).
 
 ```bash
-# Install dependencies
 bun install
 
 # Development with hot reload
@@ -154,45 +221,55 @@ bun run dev           # Chrome
 bun run dev:firefox   # Firefox
 
 # Production build
-bun run build         # Chrome
-bun run build:firefox # Firefox
+bun run build
+bun run build:firefox
 ```
 
 Copy `.env.example` to `.env` and fill in the values before building.
 
 ---
 
-## Project structure
+## Project Structure
 
 ```
 src/
   assets/
-    app.css          # Global styles and bundled @font-face declarations
-    fonts/           # Bundled font files (Noto Sans, Bangers, Comic Neue)
+    app.css              # Global styles and @font-face declarations
+    fonts/               # Bundled fonts (Noto Sans, Bangers, Comic Neue)
 
   entrypoints/
-    background.ts    # Service worker, handles detection and Gemini requests
-    content.ts       # Injected into manga pages, mounts the overlay UI
-    offscreen/       # Offscreen document used to run YOLO inference
-    popup/           # Extension popup: Home, Context, and Settings tabs
+    background/          # Service worker: coordinates detection and API calls
+    content/             # Injected into the page, mounts the overlay UI
+    offscreen/           # Isolated document for YOLO and OCR inference
+    popup/               # Extension popup (Home, Context, Settings tabs)
+    setup/               # Onboarding flow shown on first install
 
   lib/
-    adapters.ts      # Site adapters for reading series name, chapter, page index
-    components/      # Svelte components including the bbox overlay and toolbar
-    detections.ts    # YOLO ONNX inference wrapper
-    gemini.ts        # Gemini API client and prompt construction
-    utils.ts         # Canvas painting, text fitting, image inpainting, bbox utilities
+    adapters.ts          # COMMUNITY_RULES and URL-to-metadata matching
+    components/
+      Overlay.svelte     # Bubble editor and translation overlay
+    configs.ts           # Defaults: models, languages, fonts, thresholds
+    detections/          # YOLO ONNX inference wrapper
+    gemini/              # Gemini API client and prompt construction
+    ocr/                 # PaddleOCR ONNX inference wrapper
+    utils.ts             # Canvas painting, text fitting, inpainting, bbox math
+    webllm.ts            # WebLLM loader and translation interface
 ```
 
 ---
 
 ## Roadmap
 
-- **v1.0** -- Local mode: on-device OCR and translation with no API key required
-- **v2.0** -- Auto scan: translate pages in the background without manual box review
+- **v2.0**: Auto scan: translate pages in the background without manual box review
+
+---
+
+## Contributing
+
+The easiest place to start is a site adapter PR as described above. For bug reports or feature ideas, open an issue. For larger changes, an issue first saves everyone time.
 
 ---
 
 ## License
 
-[MIT](https://github.com/kiuyha/ComicTL/blob/main/LICENSE)
+[MIT](LICENSE)
