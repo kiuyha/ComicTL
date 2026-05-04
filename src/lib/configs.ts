@@ -54,7 +54,7 @@ export const DefaultConfig = {
     `languages/${langGroup}/rec.onnx`,
   ocrDictPath: (langGroup: string) => `languages/${langGroup}/dict.txt`,
 
-  geminiTemperature: 0.3,
+  llmTemperature: 0.3,
   minTranslations: 5, // number of translations per series before resetting context
 
   geminiModels: [
@@ -67,10 +67,20 @@ export const DefaultConfig = {
     { id: "yolo26n", label: "YOLO26-Nano" },
     { id: "yolo26s", label: "YOLO26-Small" },
   ],
-  llmModels: {
-    Balanced: "Qwen3-4B-q4f16_1-MLC", // Medium VRAM (3431.59 MB)
-    HighQuality: "Qwen3-8B-q4f16_1-MLC", // High VRAM (5695.78 MB)
-  },
+  llmModels: [
+    {
+      id: "Qwen3-4B-q4f16_1-MLC",
+      label: "Balanced",
+      desc: "Fast and capable for most manga translations.",
+      vram: "3.4 GB",
+    },
+    {
+      id: "Qwen3-8B-q4f16_1-MLC",
+      label: "Powerful",
+      desc: "Richer reasoning for complex or literary text.",
+      vram: "5.7 GB",
+    },
+  ],
   availableLanguages: [
     "Auto-Detect",
     "Indonesian",

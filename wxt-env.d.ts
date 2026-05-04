@@ -13,13 +13,13 @@ interface Bbox {
   confidence: number;
 }
 
-type Translations = string[]; 
+type Translations = string[];
 
 interface SeriesContext {
   seriesName: string;
   summary: string;
   dictionary: string;
-  
+
   // Tracking the last translated position
   lastChapterId: string | null;
   lastPageIndex: number | null;
@@ -36,4 +36,9 @@ interface SeriesContext {
 interface PageCache {
   bboxes: Bbox[];
   translations: Translations;
+}
+
+interface TranslateResult {
+  translations: Translations;
+  context?: { summary: string; dictionary: string };
 }

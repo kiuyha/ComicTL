@@ -15,6 +15,12 @@ export async function fetchAsBase64(url: string) {
   return `data:${mimeType};base64,${base64}`;
 }
 
+// Store in-flight requests to prevent duplicate network calls
+const inFlightRequests = new Map<
+  string,
+  Promise<ort.InferenceSession | Response | undefined>
+>();
+
 export function downloadArtifactHF(
   repoID: string,
   path: `${string}.onnx`,
@@ -35,44 +41,60 @@ export async function downloadArtifactHF(
   autoUpdate?: boolean,
   noReturn?: boolean,
 ): Promise<ort.InferenceSession | Response | undefined> {
-  console.log(`Downloading ${repoID}/${path}`);
   const url = `https://huggingface.co/${repoID}/resolve/main/${path}`;
-  const cache = await caches.open(repoID);
 
-  let response = await cache.match(url);
-  let needsUpdate = !response;
+  if (inFlightRequests.has(url)) {
+    const result = await inFlightRequests.get(url);
+    return result instanceof Response ? result.clone() : result;
+  }
 
-  if (autoUpdate && response) {
-    try {
-      const headResponse = await fetch(url, { method: "HEAD" });
-      const currentHash =
-        headResponse.headers.get("x-repo-commit") ||
-        headResponse.headers.get("etag");
-      const localHash =
-        response.headers.get("x-repo-commit") || response.headers.get("etag");
+  const requestPromise = (async () => {
+    const cache = await caches.open(repoID);
 
-      if (currentHash !== localHash) needsUpdate = true;
-    } catch (error) {
-      console.warn(
-        "Offline: skipping update check and using cache. Error:",
-        error,
-      );
+    let response = await cache.match(url);
+    let needsUpdate = !response;
+
+    if (autoUpdate && response) {
+      try {
+        const headResponse = await fetch(url, { method: "HEAD" });
+        const currentHash =
+          headResponse.headers.get("x-repo-commit") ||
+          headResponse.headers.get("etag");
+        const localHash =
+          response.headers.get("x-repo-commit") || response.headers.get("etag");
+
+        if (currentHash !== localHash) needsUpdate = true;
+      } catch (error) {
+        console.warn(
+          "Offline: skipping update check and using cache. Error:",
+          error,
+        );
+      }
     }
-  }
 
-  if (!response || needsUpdate) {
-    response = await fetch(url);
-    await cache.put(url, response.clone());
-  }
+    if (!response || needsUpdate) {
+      response = await fetch(url);
+      await cache.put(url, response.clone());
+    }
 
-  if (noReturn) return;
+    if (noReturn) return;
 
-  if (path.endsWith(".onnx")) {
-    return ort.InferenceSession.create(await response.arrayBuffer(), {
-      executionProviders: ["webnn", "webgpu", "wasm"],
-    });
-  } else {
-    return response;
+    if (path.endsWith(".onnx")) {
+      return ort.InferenceSession.create(await response.arrayBuffer(), {
+        executionProviders: ["webnn", "webgpu", "wasm"],
+      });
+    } else {
+      return response.clone();
+    }
+  })();
+
+  inFlightRequests.set(url, requestPromise);
+
+  try {
+    const result = await requestPromise;
+    return result instanceof Response ? result.clone() : result;
+  } finally {
+    inFlightRequests.delete(url);
   }
 }
 

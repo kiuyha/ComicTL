@@ -25,9 +25,7 @@ export default defineBackground(() => {
     if (info.menuItemId === "comictl-translate-image") {
       // Show popup if user not yet set up the extension
       if (await storage.getItem("local:is-first-run", { fallback: true })) {
-        browser.action
-          .openPopup({ windowId: tab?.windowId })
-          .catch(console.error);
+        openSetupTab();
         return;
       }
 

@@ -1,11 +1,6 @@
 import { DefaultConfig } from "../configs";
 import { drawNumberedBboxes } from "./utils";
 
-interface TranslateResult {
-  translations: Translations;
-  context?: { summary: string; dictionary: string };
-}
-
 export async function translateWithGemini(
   imageSrc: string,
   bboxes: Bbox[],
@@ -14,7 +9,7 @@ export async function translateWithGemini(
   sourceLang: string,
   seriesContext?: SeriesContext,
   model = DefaultConfig.geminiModels[0].id,
-  temperature = DefaultConfig.geminiTemperature,
+  temperature = DefaultConfig.llmTemperature,
 ): Promise<TranslateResult> {
   const cleanBase64 = (await drawNumberedBboxes(imageSrc, bboxes)).replace(
     /^data:image\/(png|jpeg|webp);base64,/,
@@ -25,22 +20,12 @@ export async function translateWithGemini(
     !seriesContext?.dictionary ||
     (seriesContext?.translatedCount ?? 0) % DefaultConfig.minTranslations === 0;
 
-  const prompt = `You are a professional manga translator${seriesContext?.seriesName ? ` working on "${seriesContext.seriesName}"` : ""}.
+  const systemPrompt = `You are a professional manga translator${seriesContext?.seriesName ? ` working on "${seriesContext.seriesName}"` : ""}.
 Translate the text in the numbered bounding boxes in the provided image${sourceLang !== "Auto-Detect" ? ` FROM ${sourceLang.toUpperCase()}` : ""} INTO ${targetLang.toUpperCase()}.
 Maintain the tone and context of the scene.
 ${seriesContext?.summary ? `\nSeries context: ${seriesContext.summary}` : ""}
 ${seriesContext?.dictionary ? `\nTerm dictionary (always use these): ${seriesContext.dictionary}` : ""}
 ${seriesContext?.recentHistory?.length ? `\nPrevious pages for continuity:\n${seriesContext.recentHistory.map((h, i) => `Page -${seriesContext.recentHistory.length - i}: ${h.text}`).join("\n")}` : ""}
-
---- CURRENT PAGE TRANSLATION ---
-Please process the dialogue boxes found in the provided image.
-${
-  needsContext
-    ? `\nAlso infer from this page:
-1. A 1-2 sentence summary of the series tone, setting, and genre IN ENGLISH.
-2. Any character names, places, or unique terms visible, formatted as "Original Term -> English Translation". If no specific terms are visible, output strictly "None". Do not explain or write sentences.`
-    : ""
-}
 
 CRITICAL LANGUAGE INSTRUCTIONS:
 1. The dialogue inside the "translations" array MUST be strictly in ${targetLang.toUpperCase()}. DO NOT transcribe or copy the original text from the image. You must output the translated meaning.
@@ -55,6 +40,15 @@ Output strictly as valid JSON matching this structure without markdown formattin
   }
 }`;
 
+  const userPrompt = `Please process the dialogue boxes found in the provided image.
+${
+  needsContext
+    ? `\nAlso infer from this page:
+1. A 1-2 sentence summary of the series tone, setting, and genre IN ENGLISH.
+2. Any character names, places, or unique terms visible, formatted as "Original Term -> English Translation". If no specific terms are visible, output strictly "None". Do not explain or write sentences.`
+    : ""
+}`;
+
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const response = await fetch(url, {
@@ -63,10 +57,14 @@ Output strictly as valid JSON matching this structure without markdown formattin
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
+      systemInstruction: {
+        parts: [{ text: systemPrompt }],
+      },
       contents: [
         {
+          role: "user",
           parts: [
-            { text: prompt },
+            { text: userPrompt },
             {
               inlineData: {
                 mimeType: "image/jpeg",

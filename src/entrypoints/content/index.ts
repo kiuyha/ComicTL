@@ -169,25 +169,23 @@ export default defineContentScript({
                     seriesContext,
                   },
                   config: {
-                    currentMode: await storage.getItem<string>(
-                      "sync:current-mode",
-                    ),
-                    targetLang: await storage.getItem<string>(
-                      "sync:target-lang",
-                    ),
-                    sourceLang: await storage.getItem<string>(
-                      "sync:source-lang",
-                    ),
-                    geminiKey: await storage.getItem<string>(
-                      "sync:gemini-key",
-                    ),
-                    geminiModel: await storage.getItem<string>(
-                      "sync:gemini-model",
-                    ),
+                    currentMode:
+                      await storage.getItem<string>("sync:current-mode"),
+                    targetLang:
+                      await storage.getItem<string>("sync:target-lang"),
+                    sourceLang:
+                      await storage.getItem<string>("sync:source-lang"),
+                    geminiKey: await storage.getItem<string>("sync:gemini-key"),
+                    geminiModel:
+                      await storage.getItem<string>("sync:gemini-model"),
                     ocrMinConfidence: await storage.getItem<number>(
                       "sync:ocr-min-confidence",
-                    )
-                  }
+                    ),
+                    llmModel: await storage.getItem<string>("sync:llm-model"),
+                    llmTemperature: await storage.getItem<number>(
+                      "sync:llm-temperature",
+                    ),
+                  },
                 });
 
                 if (resp?.error) return resp;
