@@ -38,7 +38,9 @@ export default defineBackground(() => {
 
   browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
     // Forwarding Messages to Offscreen
-    if (msg.type === "DETECT_BBOX" || msg.type === "TRANSLATE_IMAGE") {
+    if (
+      ["DETECT_BBOX", "TRANSLATE_IMAGE", "MAKE_SITE_RULE_AI"].includes(msg.type)
+    ) {
       ensureOffscreen().then(() => {
         browser.runtime
           .sendMessage({

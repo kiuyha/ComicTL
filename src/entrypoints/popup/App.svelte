@@ -18,17 +18,28 @@
     X,
     TriangleAlert,
     Download,
+    Play,
+    FileCode,
+    Trash2,
+    Plus,
   } from "lucide-svelte";
   import { DefaultConfig } from "@/lib/configs";
   import { untrack } from "svelte";
   import { openSetupTab } from "@/lib/utils";
+  import { COMMUNITY_RULES, getSiteRule } from "@/lib/adapters";
 
   let {
-    seriesName,
+    hostname,
+    title,
+    path,
   }: {
-    seriesName: string;
+    hostname: string;
+    title: string;
+    path: string;
   } = $props();
 
+  let seriesName = "Unknown Series";
+  let ruleId = $state("");
   let activeTab = $state("home");
   let shareData = $state(true);
   let geminiKey = $state("");
@@ -44,7 +55,7 @@
   let detectionAutoUpdate = $state(true);
   let detectionMinConfidence = $state(0.5);
   let seriesContext = $state<SeriesContext>({
-    seriesName,
+    seriesName: "",
     summary: "",
     dictionary: "",
     lastChapterId: null,
@@ -77,6 +88,11 @@
   let cachedLlms = $state<string[]>([]);
   let llmModel = $state(DefaultConfig.llmModels[0].id);
   let llmTemperature = $state(DefaultConfig.llmTemperature);
+  let customRules = $state<SiteRule[]>([]);
+  let editingRule = $state<SiteRule | null>(null);
+  let testResult = $state<any>(null);
+  let isTesting = $state(false);
+  let isGeneratingAI = $state(false);
 
   const TABS = [
     { id: "home", label: "Home", icon: Zap },
@@ -147,6 +163,13 @@
   }
 
   async function loadSettings() {
+    ({ ruleId, seriesName } = await getSiteRule(
+      undefined,
+      hostname,
+      title,
+      path,
+    ));
+
     const items = await storage.getItems([
       "local:is-first-run",
       "sync:share-data",
@@ -192,6 +215,7 @@
       : [];
     llmModel = saved["sync:llm-model"] ?? llmModel;
     llmTemperature = saved["sync:llm-temperature"] ?? llmTemperature;
+    customRules = saved["sync:custom-site-rules"] ?? customRules;
     const storedCtx = saved[`sync:context-${seriesName}`];
     if (storedCtx) {
       seriesContext = { ...seriesContext, ...storedCtx };
@@ -224,6 +248,7 @@
         { key: "local:custom-fonts", value: $state.snapshot(customFonts) },
         { key: "sync:llm-model", value: llmModel },
         { key: "sync:llm-temperature", value: llmTemperature },
+        { key: "sync:custom-site-rules", value: $state.snapshot(customRules) },
       ]);
     }, 150);
   }
@@ -248,6 +273,7 @@
       customFonts.length,
       llmModel,
       llmTemperature,
+      customRules.length,
     ];
     debouncedSave();
 
@@ -351,9 +377,12 @@
   $effect(() => {
     (async () => {
       try {
-        const res = await fetch(import.meta.env.WXT_LATEST_RELEASE_URL, {
-          method: "HEAD",
-        });
+        const res = await fetch(
+          `${import.meta.env.WXT_GITHUB_REPO}/releases/latest`,
+          {
+            method: "HEAD",
+          },
+        );
 
         // fetch follows redirects automatically
         const finalUrl = res.url;
@@ -375,6 +404,108 @@
       }
     })();
   });
+
+  function addRule() {
+    editingRule = {
+      id: crypto.randomUUID(),
+      domain: hostname,
+      seriesName: {
+        regex: "",
+        source: "title",
+      },
+      chapterId: {
+        regex: "",
+        source: "path",
+      },
+      pageIndex: {
+        regex: "",
+        source: "path",
+      },
+    };
+  }
+
+  function saveRule() {
+    const idx = customRules.findIndex((r) => r.id === editingRule!.id);
+    if (idx >= 0) customRules[idx] = editingRule!;
+    else customRules.push(editingRule!);
+    editingRule = null;
+    testResult = null;
+  }
+
+  async function testRule() {
+    isTesting = true;
+    testResult = null;
+    try {
+      const tabs = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      if (tabs[0]?.id)
+        testResult = await browser.tabs.sendMessage(tabs[0].id, {
+          type: "TEST_REGEX_RULE",
+          data: { rule: editingRule },
+        });
+    } catch (err: any) {
+      testResult = { error: "Failed to test rule on active tab." };
+    }
+    isTesting = false;
+  }
+
+  function shareRuleToGitHub(rule: SiteRule) {
+    // Format the rule nicely for GitHub
+    const ruleSnippet = JSON.stringify(
+      {
+        ...rule,
+        id: rule.domain.replace(/[^a-zA-Z0-9]/g, ""),
+      },
+      null,
+      2,
+    );
+
+    const title = encodeURIComponent(`[Site Rule] Support for ${rule.domain}`);
+    const body = encodeURIComponent(
+      `Please add this custom rule to \`COMMUNITY_RULES\`:\n\n\`\`\`json\n${ruleSnippet}\n\`\`\``,
+    );
+
+    window.open(
+      `${import.meta.env.WXT_GITHUB_REPO}/issues/new?title=${title}&body=${body}&labels=enhancement`,
+      "_blank",
+    );
+  }
+
+  function generateRegexWithAI() {
+    isGeneratingAI = true;
+    browser.runtime
+      .sendMessage({
+        type: "MAKE_SITE_RULE_AI",
+        data: {
+          title,
+          path,
+        },
+        config: {
+          currentMode,
+          geminiKey,
+          geminiModel,
+          llmModel,
+          llmTemperature,
+        },
+      })
+      .then((res: AIGeneratedRule | { error: string }) => {
+        if ("error" in res) {
+          alert(res.error);
+        } else {
+          editingRule = {
+            ...(editingRule || {
+              id: crypto.randomUUID(),
+              domain: hostname,
+            }),
+            ...res,
+          };
+        }
+
+        isGeneratingAI = false;
+      });
+  }
 </script>
 
 <main
@@ -412,31 +543,6 @@
       {/each}
     </div>
 
-    {#if latestVersion?.version && latestVersion.version !== latestVersion.currentVersion}
-      <div
-        class="flex items-center gap-3 p-2 mb-3 text-sm bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-200 rounded-xl"
-      >
-        <TriangleAlert
-          size={25}
-          class="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400"
-        />
-        <p class="leading-relaxed">
-          <strong class="font-semibold text-amber-900 dark:text-amber-100"
-            >Update Available:</strong
-          >
-          Version {latestVersion.version} is out.
-          <a
-            href={latestVersion.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            class="font-medium underline decoration-amber-400/50 hover:decoration-amber-500 dark:hover:decoration-amber-300 transition-colors"
-          >
-            Download from GitHub
-          </a>
-        </p>
-      </div>
-    {/if}
-
     <div class="grow grid">
       {#key activeTab}
         <div
@@ -444,6 +550,45 @@
           out:fade={{ duration: 150 }}
           class="col-start-1 row-start-1 space-y-5 flex flex-col h-full"
         >
+          {#if latestVersion?.version && latestVersion.version !== latestVersion.currentVersion}
+            <div
+              class="flex items-center gap-3 p-2 mb-3 text-sm bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-800 dark:text-amber-200 rounded-xl"
+            >
+              <TriangleAlert
+                size={25}
+                class="shrink-0 mt-0.5 text-amber-600 dark:text-amber-400"
+              />
+              <p class="leading-relaxed">
+                <strong class="font-semibold text-amber-900 dark:text-amber-100"
+                  >Update Available:</strong
+                >
+                Version {latestVersion.version} is out.
+                <a
+                  href={latestVersion.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="font-medium underline decoration-amber-400/50 hover:decoration-amber-500 dark:hover:decoration-amber-300 transition-colors"
+                >
+                  Download from GitHub
+                </a>
+              </p>
+            </div>
+          {/if}
+
+          {#if ruleId === "fallback"}
+            <div
+              class="mt-2 flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-amber-700 dark:text-amber-400"
+            >
+              <TriangleAlert size={16} class="shrink-0 mt-0.5" />
+              <div class="flex-1 text-xs">
+                <p class="font-bold">Unrecognized Site</p>
+                <p class="mt-0.5 opacity-90 leading-snug">
+                  Using fallback parsers. If the chapter or series name looks
+                  wrong, add a custom rule in Settings.
+                </p>
+              </div>
+            </div>
+          {/if}
           {#if activeTab === "home"}
             <div
               class="bg-zinc-100 dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800"
@@ -919,7 +1064,7 @@
                     id="llm-temperature"
                     type="range"
                     min="0"
-                    max="2"
+                    max="1"
                     step="0.1"
                     bind:value={llmTemperature}
                     class="w-full h-1.5 bg-zinc-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
@@ -1046,6 +1191,261 @@
                     onchange={handleFontUpload}
                   />
                 </label>
+              </div>
+            </div>
+
+            <!-- CUSTOM SITE PARSING RULES -->
+            <div>
+              <span
+                class="text-sm font-bold uppercase tracking-widest text-zinc-500 ml-1"
+              >
+                Custom Site Parsing Rules
+              </span>
+              <div
+                class="bg-zinc-50 dark:bg-zinc-900/50 p-4 rounded-xl border border-zinc-200 dark:border-zinc-800 mt-2 space-y-4"
+              >
+                {#if editingRule}
+                  <!-- DOMAIN INPUT WITH "USE CURRENT" BUTTON -->
+                  <div class="space-y-1.5">
+                    <label
+                      for="domain"
+                      class="text-[10px] font-bold uppercase tracking-widest text-zinc-500"
+                    >
+                      Domain
+                    </label>
+                    <input
+                      type="text"
+                      bind:value={editingRule.domain}
+                      placeholder="e.g. mangadex.org"
+                      class="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 text-xs outline-none shadow-sm"
+                    />
+                  </div>
+
+                  <!-- AI GENERATE BUTTON (Place this right before the Title/Path inputs) -->
+                  <button
+                    onclick={generateRegexWithAI}
+                    disabled={isGeneratingAI}
+                    class="cursor-pointer w-full flex items-center justify-center gap-2 py-2 my-3 bg-linear-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white rounded-lg text-xs font-bold shadow-sm transition-all disabled:opacity-50"
+                  >
+                    {#if isGeneratingAI}
+                      <span class="animate-spin">🌀</span> Generating...
+                    {:else}
+                      ✨ Auto-Generate Rules with AI
+                    {/if}
+                  </button>
+                  <!-- The Rule Editor -->
+                  <div class="space-y-3">
+                    <div class="flex justify-between items-center mb-2">
+                      <span
+                        class="text-xs font-bold uppercase tracking-widest text-zinc-500"
+                        >Edit Rule</span
+                      >
+                      <button
+                        onclick={() => {
+                          editingRule = null;
+                          testResult = null;
+                        }}
+                        class="text-xs text-zinc-500 hover:text-red-500 cursor-pointer"
+                        >Cancel</button
+                      >
+                    </div>
+
+                    <div class="space-y-1.5">
+                      <label
+                        for="series-name-rule"
+                        class="text-[10px] font-bold uppercase tracking-widest text-zinc-500"
+                        >Series Name</label
+                      >
+                      <div class="flex gap-2">
+                        <select
+                          id="series-name-rule"
+                          bind:value={editingRule.seriesName.source}
+                          class="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 text-xs outline-none cursor-pointer"
+                        >
+                          <option value="title">Title</option><option
+                            value="path">Path</option
+                          >
+                        </select>
+                        <input
+                          type="text"
+                          bind:value={editingRule.seriesName.regex}
+                          placeholder="Regex..."
+                          class="flex-1 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 text-xs outline-none font-mono shadow-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                      <label
+                        for="chapter-id-rule"
+                        class="text-[10px] font-bold uppercase tracking-widest text-zinc-500"
+                        >Chapter ID</label
+                      >
+                      <div class="flex gap-2">
+                        <select
+                          bind:value={editingRule.chapterId.source}
+                          class="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 text-xs outline-none cursor-pointer"
+                        >
+                          <option value="title">Title</option><option
+                            value="path">Path</option
+                          >
+                        </select>
+                        <input
+                          id="chapter-id-rule"
+                          type="text"
+                          bind:value={editingRule.chapterId.regex}
+                          placeholder="Regex..."
+                          class="flex-1 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 text-xs outline-none font-mono shadow-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div class="space-y-1.5">
+                      <label
+                        for="page-index-rule"
+                        class="text-[10px] font-bold uppercase tracking-widest text-zinc-500"
+                        >Page Index</label
+                      >
+                      <div class="flex gap-2">
+                        <select
+                          bind:value={editingRule.pageIndex.source}
+                          class="bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 text-xs outline-none cursor-pointer"
+                        >
+                          <option value="title">Title</option><option
+                            value="path">Path</option
+                          >
+                        </select>
+                        <input
+                          id="page-index-rule"
+                          type="text"
+                          bind:value={editingRule.pageIndex.regex}
+                          placeholder="Regex..."
+                          class="flex-1 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 text-xs outline-none font-mono shadow-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <!-- Live Tester -->
+                    <div
+                      class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800/30 rounded-lg"
+                    >
+                      <div class="flex justify-between items-center mb-2">
+                        <span
+                          class="text-xs font-bold text-blue-700 dark:text-blue-400"
+                          >Live Test on Current Tab</span
+                        >
+                        <button
+                          onclick={testRule}
+                          disabled={isTesting}
+                          class="flex items-center gap-1 px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer disabled:opacity-50"
+                        >
+                          <Play size={10} /> Test
+                        </button>
+                      </div>
+
+                      {#if testResult}
+                        <div
+                          class="space-y-2 mt-2 pt-2 border-t border-blue-200 dark:border-blue-800/50"
+                        >
+                          {#if testResult.error}
+                            <p class="text-xs text-red-500">
+                              {testResult.error}
+                            </p>
+                          {:else}
+                            <div
+                              class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[10px]"
+                            >
+                              <span class="text-zinc-500 font-bold uppercase"
+                                >Series:</span
+                              >
+                              <span
+                                class="font-mono text-zinc-800 dark:text-zinc-200 truncate"
+                                >{testResult.context.seriesName}</span
+                              >
+                              <span class="text-zinc-500 font-bold uppercase"
+                                >Chapter:</span
+                              >
+                              <span
+                                class="font-mono text-zinc-800 dark:text-zinc-200 truncate"
+                                >{testResult.context.chapterId}</span
+                              >
+                              <span class="text-zinc-500 font-bold uppercase"
+                                >Page:</span
+                              >
+                              <span
+                                class="font-mono text-zinc-800 dark:text-zinc-200 truncate"
+                                >{testResult.context.pageIndex}</span
+                              >
+                            </div>
+                          {/if}
+                        </div>
+                      {/if}
+                    </div>
+
+                    <button
+                      onclick={saveRule}
+                      class="w-full py-2 bg-zinc-800 hover:bg-zinc-700 dark:bg-zinc-200 dark:hover:bg-zinc-300 text-white dark:text-zinc-900 rounded-lg text-xs font-bold transition-colors cursor-pointer mt-2"
+                    >
+                      Save Rule
+                    </button>
+
+                    {#if COMMUNITY_RULES.some((r) => r.domain === editingRule?.domain) && editingRule.seriesName.regex && editingRule.chapterId.regex && editingRule.pageIndex.regex}
+                      <button
+                        onclick={() => shareRuleToGitHub(editingRule!)}
+                        class="px-3 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                        title="Submit this rule to the official repository"
+                      >
+                        Share Rule
+                      </button>
+                    {/if}
+                  </div>
+                {:else}
+                  <!-- Rule List View -->
+                  <div class="space-y-2">
+                    {#each customRules as rule}
+                      <div
+                        class="overflow-y-scroll max-h-75 flex items-center justify-between p-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-sm"
+                      >
+                        <div class="flex items-center gap-2 overflow-hidden">
+                          <FileCode size={14} class="text-blue-500 shrink-0" />
+                          <span class="text-xs font-mono truncate"
+                            >{rule.domain}</span
+                          >
+                        </div>
+                        <div class="flex gap-1 shrink-0">
+                          <button
+                            onclick={() => (editingRule = { ...rule })}
+                            class="text-[10px] px-2 py-1 rounded bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 cursor-pointer transition-colors"
+                            >Edit</button
+                          >
+                          <button
+                            onclick={() =>
+                              (customRules = customRules.filter(
+                                (r) => r.id !== rule.id,
+                              ))}
+                            class="p-1 text-zinc-400 hover:text-red-500 cursor-pointer transition-colors"
+                            ><Trash2 size={12} /></button
+                          >
+                        </div>
+                      </div>
+                    {/each}
+
+                    {#if customRules.length === 0}
+                      <div
+                        class="text-center py-3 text-xs text-zinc-500 italic"
+                      >
+                        No custom rules added.
+                      </div>
+                    {/if}
+
+                    <button
+                      onclick={addRule}
+                      class="w-full flex justify-center items-center gap-1 py-2 border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-blue-400 dark:hover:border-blue-500 text-zinc-500 hover:text-blue-500 rounded-lg text-xs font-bold transition-colors cursor-pointer mt-2"
+                    >
+                      <Plus size={14} /> Add Custom Rule
+                    </button>
+                  </div>
+                {/if}
               </div>
             </div>
 

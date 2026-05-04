@@ -1,11 +1,10 @@
 import { mount } from "svelte";
 import "@/assets/app.css";
 import App from "./App.svelte";
-import { getAdapter } from "@/lib/adapters";
 import { openSetupTab } from "@/lib/utils";
 
 const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-const hostname = tab.url ? new URL(tab.url).hostname : "";
+const url = new URL(tab.url || "");
 
 if (await storage.getItem("local:is-first-run", { fallback: true })) {
   openSetupTab();
@@ -14,8 +13,9 @@ if (await storage.getItem("local:is-first-run", { fallback: true })) {
 const app = mount(App, {
   target: document.getElementById("app")!,
   props: {
-    seriesName:
-      getAdapter(hostname).seriesName(tab.title ?? "") ?? "Unknown Series",
+    hostname: url.hostname,
+    title: tab.title ?? "",
+    path: url.pathname,
   },
 });
 

@@ -1,8 +1,8 @@
 import { detectTextBubble } from "@/lib/detections/main";
-import { translateWithGemini } from "@/lib/gemini/main";
+import { makeSiteRuleWithGemini, translateWithGemini } from "@/lib/gemini/main";
 import "@/assets/app.css";
 import { textRecognise } from "@/lib/ocr/main";
-import { translateLocal } from "@/lib/webllm";
+import { makeSiteRuleLocal, translateLocal } from "@/lib/webllm";
 
 browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
   if (msg.type === "OFFSCREEN_DETECT_BBOX") {
@@ -60,6 +60,24 @@ browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
         geminiModel,
         llmTemperature,
       )
+        .then(sendResponse)
+        .catch((err) => sendResponse({ error: err.message }));
+    }
+
+    return true;
+  }
+
+  if (msg.type === "OFFSCREEN_MAKE_SITE_RULE_AI") {
+    const { currentMode, geminiKey, geminiModel, llmModel, llmTemperature } =
+      msg.config;
+    const { title, path } = msg.data;
+
+    if (currentMode === "local") {
+      makeSiteRuleLocal(title, path, llmModel, llmTemperature)
+        .then(sendResponse)
+        .catch((err) => sendResponse({ error: err.message }));
+    } else {
+      makeSiteRuleWithGemini(title, path, geminiKey, geminiModel, llmTemperature)
         .then(sendResponse)
         .catch((err) => sendResponse({ error: err.message }));
     }

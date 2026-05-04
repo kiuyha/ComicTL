@@ -1,5 +1,6 @@
 import { MLCEngine } from "@mlc-ai/web-llm";
 import { DefaultConfig } from "./configs";
+import { MAKE_SITE_RULE_PROMPT } from "./adapters";
 
 let globalEngine: MLCEngine | null = null;
 let currentlyLoadedModel: string | null = null;
@@ -54,6 +55,89 @@ ${
     : ""
 }`;
 
+  const schema = JSON.stringify({
+    type: "object",
+    properties: {
+      translations: { type: "array", items: { type: "string" } },
+      ...(needsContext
+        ? {
+            context: {
+              type: "object",
+              properties: {
+                summary: { type: "string" },
+                dictionary: { type: "string" },
+              },
+              required: ["summary", "dictionary"],
+            },
+          }
+        : {}),
+    },
+    required: ["translations", ...(needsContext ? ["context"] : [])],
+  });
+
+  return await runLLMModel(
+    systemPrompt,
+    userPrompt,
+    schema,
+    model,
+    temperature,
+  );
+}
+
+export async function makeSiteRuleLocal(
+  title: string,
+  path: string,
+  model = DefaultConfig.llmModels[0].id,
+  temperature = DefaultConfig.llmTemperature,
+): Promise<AIGeneratedRule> {
+  const prompt = MAKE_SITE_RULE_PROMPT(title, path);
+  const schema = JSON.stringify({
+    type: "object",
+    properties: {
+      seriesName: {
+        type: "object",
+        properties: {
+          regex: { type: "string" },
+          source: { type: "string" },
+        },
+        required: ["regex", "source"],
+      },
+      chapterId: {
+        type: "object",
+        properties: {
+          regex: { type: "string" },
+          source: { type: "string" },
+        },
+        required: ["regex", "source"],
+      },
+      pageIndex: {
+        type: "object",
+        properties: {
+          regex: { type: "string" },
+          source: { type: "string" },
+        },
+        required: ["regex", "source"],
+      },
+    },
+    required: ["seriesName", "chapterId", "pageIndex"],
+  });
+
+  return await runLLMModel(
+    prompt.system,
+    prompt.user,
+    schema,
+    model,
+    temperature,
+  );
+}
+
+async function runLLMModel(
+  systemPrompt: string,
+  userPrompt: string,
+  schema: string,
+  model: string,
+  temperature: number,
+) {
   if (!globalEngine) {
     globalEngine = new MLCEngine();
   }
@@ -71,25 +155,7 @@ ${
     temperature,
     response_format: {
       type: "json_object",
-      schema: JSON.stringify({
-        type: "object",
-        properties: {
-          translations: { type: "array", items: { type: "string" } },
-          ...(needsContext
-            ? {
-                context: {
-                  type: "object",
-                  properties: {
-                    summary: { type: "string" },
-                    dictionary: { type: "string" },
-                  },
-                  required: ["summary", "dictionary"],
-                },
-              }
-            : {}),
-        },
-        required: ["translations", ...(needsContext ? ["context"] : [])],
-      }),
+      schema,
     },
   });
 

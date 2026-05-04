@@ -1,7 +1,7 @@
 import Overlay from "@/lib/components/Overlay.svelte";
 import { mount, unmount } from "svelte";
 import { ShadowRootContentScriptUi } from "#imports";
-import { getAdapter } from "@/lib/adapters";
+import { getSiteRule } from "@/lib/adapters";
 import {
   createImageObservers,
   repaintWithTranslations,
@@ -33,223 +33,239 @@ export default defineContentScript({
       lastRightClickedSrc = img && srcKey(img.src);
     });
 
-    browser.runtime.onMessage.addListener((msg) => {
-      if (msg.type !== "comictl-translate-image") return;
+    browser.runtime.onMessage.addListener((msg, _, sendResponse) => {
+      if (msg.type === "comictl-translate-image") {
+        const clicked = msg.data ?? lastRightClickedSrc;
+        const originalSrc = translatedSrcMap.get(clicked) ?? clicked;
+        if (!originalSrc) return;
 
-      const clicked = msg.data ?? lastRightClickedSrc;
-      const originalSrc = translatedSrcMap.get(clicked) ?? clicked;
-      if (!originalSrc) return;
+        // If overlay already exists, bring it back to refine mode
+        if (overlays.has(originalSrc)) {
+          const existing = overlays.get(originalSrc)!;
 
-      // If overlay already exists, bring it back to refine mode
-      if (overlays.has(originalSrc)) {
-        const existing = overlays.get(originalSrc)!;
-
-        if (!document.body.contains(existing.wrapper)) {
-          existing.ui.remove();
-          overlays.delete(originalSrc);
-        } else {
-          // It is still alive on the page, just bring it back to refine mode
-          existing.wrapper.dispatchEvent(
-            new CustomEvent("comictl:back-to-refine"),
-          );
-          return;
+          if (!document.body.contains(existing.wrapper)) {
+            existing.ui.remove();
+            overlays.delete(originalSrc);
+          } else {
+            // It is still alive on the page, just bring it back to refine mode
+            existing.wrapper.dispatchEvent(
+              new CustomEvent("comictl:back-to-refine"),
+            );
+            return;
+          }
         }
-      }
 
-      const imgElement = document.querySelector<HTMLImageElement>(
-        `img[src="${originalSrc.replace(/"/g, '\\"')}"]`,
-      );
-      if (!imgElement) return;
+        const imgElement = document.querySelector<HTMLImageElement>(
+          `img[src="${originalSrc.replace(/"/g, '\\"')}"]`,
+        );
+        if (!imgElement) return;
 
-      const adapter = getAdapter();
-      const seriesName = adapter.seriesName() ?? "Unknown Series";
-      const chapterId = adapter.chapterId();
-      const pageIndex = adapter.pageIndex();
-      const translationKey = async () =>
-        `page-cache-${await storage.getItem<string>("sync:target-lang")}-${seriesName}-${chapterId}-${pageIndex}`;
+        const translationKey = async () => {
+          const { seriesName, chapterId, pageIndex } = await getSiteRule();
+          return `page-cache-${await storage.getItem<string>("sync:target-lang")}-${seriesName}-${chapterId}-${pageIndex}`;
+        };
 
-      const rect = imgElement.getBoundingClientRect();
-      const scaleX = rect.width / imgElement.naturalWidth;
-      const scaleY = rect.height / imgElement.naturalHeight;
+        const rect = imgElement.getBoundingClientRect();
+        const scaleX = rect.width / imgElement.naturalWidth;
+        const scaleY = rect.height / imgElement.naturalHeight;
 
-      const wrapper = document.createElement("div");
-      wrapper.style.cssText = `position:relative;display:inline-block;width:${rect.width}px;height:${rect.height}px;`;
-      imgElement.insertAdjacentElement("beforebegin", wrapper);
-      wrapper.appendChild(imgElement);
+        const wrapper = document.createElement("div");
+        wrapper.style.cssText = `position:relative;display:inline-block;width:${rect.width}px;height:${rect.height}px;`;
+        imgElement.insertAdjacentElement("beforebegin", wrapper);
+        wrapper.appendChild(imgElement);
 
-      const { styleObserver, domObserver } = createImageObservers(
-        originalSrc,
-        wrapper,
-      );
+        const { styleObserver, domObserver } = createImageObservers(
+          originalSrc,
+          wrapper,
+        );
 
-      createShadowRootUi(ctx, {
-        name: "comictl-overlay",
-        position: "inline",
-        anchor: wrapper,
-        append: "last",
+        createShadowRootUi(ctx, {
+          name: "comictl-overlay",
+          position: "inline",
+          anchor: wrapper,
+          append: "last",
 
-        onMount: (uiContainer) =>
-          mount(Overlay, {
-            target: uiContainer,
-            props: {
-              wrapper,
-              targetImageRect: rect,
-              scaleX,
-              scaleY,
-              originalSrc,
+          onMount: (uiContainer) =>
+            mount(Overlay, {
+              target: uiContainer,
+              props: {
+                wrapper,
+                targetImageRect: rect,
+                scaleX,
+                scaleY,
+                originalSrc,
 
-              getTranslationCache: async () => {
-                const cache = await storage.getItem<PageCache>(
-                  `local:${await translationKey()}`,
-                );
-                if (!cache) return;
-                const translatedSrc = await repaintWithTranslations(
-                  originalSrc,
-                  cache.bboxes,
-                  cache.translations,
-                );
-                translatedSrcMap.set(srcKey(translatedSrc), originalSrc);
-                return { bboxes: cache.bboxes, translatedSrc };
-              },
+                getTranslationCache: async () => {
+                  const cache = await storage.getItem<PageCache>(
+                    `local:${await translationKey()}`,
+                  );
+                  if (!cache) return;
+                  const translatedSrc = await repaintWithTranslations(
+                    originalSrc,
+                    cache.bboxes,
+                    cache.translations,
+                  );
+                  translatedSrcMap.set(srcKey(translatedSrc), originalSrc);
+                  return { bboxes: cache.bboxes, translatedSrc };
+                },
 
-              requestBubbleDetection: async () =>
-                browser.runtime.sendMessage({
-                  type: "DETECT_BBOX",
-                  data: originalSrc,
-                  config: {
-                    detectionModel: await storage.getItem<string>(
-                      "sync:detection-model",
-                    ),
-                    autoUpdateModel: await storage.getItem<boolean>(
-                      "sync:detection-auto-update",
-                    ),
-                    detectionMinConfidence: await storage.getItem<number>(
-                      "sync:detection-min-confidence",
-                    ),
-                  },
-                }),
+                requestBubbleDetection: async () =>
+                  browser.runtime.sendMessage({
+                    type: "DETECT_BBOX",
+                    data: originalSrc,
+                    config: {
+                      detectionModel: await storage.getItem<string>(
+                        "sync:detection-model",
+                      ),
+                      autoUpdateModel: await storage.getItem<boolean>(
+                        "sync:detection-auto-update",
+                      ),
+                      detectionMinConfidence: await storage.getItem<number>(
+                        "sync:detection-min-confidence",
+                      ),
+                    },
+                  }),
 
-              requestTextTranslation: async (
-                bboxes: Bbox[],
-                isManuallySorted: boolean,
-              ) => {
-                const shareData =
-                  await storage.getItem<boolean>("sync:share-data");
-                if (shareData && isManuallySorted)
-                  sendBboxDataToSupabase(
+                requestTextTranslation: async (
+                  bboxes: Bbox[],
+                  isManuallySorted: boolean,
+                ) => {
+                  const { seriesName, chapterId, pageIndex } =
+                    await getSiteRule();
+                  const shareData =
+                    await storage.getItem<boolean>("sync:share-data");
+
+                  if (shareData && isManuallySorted)
+                    sendBboxDataToSupabase(
+                      seriesName,
+                      chapterId,
+                      pageIndex,
+                      bboxes,
+                      originalSrc,
+                    );
+
+                  let seriesContext = await storage.getItem<SeriesContext>(
+                    `sync:context-${seriesName}`,
+                  );
+
+                  // Perform the continuity check
+                  if (seriesContext) {
+                    const isContinuous =
+                      seriesContext.lastChapterId === chapterId &&
+                      seriesContext.lastPageIndex !== null &&
+                      pageIndex === seriesContext.lastPageIndex + 1;
+
+                    // If they jumped chapters or skipped pages, wipe the history in memory
+                    if (!isContinuous) {
+                      seriesContext.recentHistory = [];
+                    }
+                  }
+
+                  const resp = await browser.runtime.sendMessage({
+                    type: "TRANSLATE_IMAGE",
+                    data: {
+                      src: originalSrc,
+                      bboxes,
+                      seriesContext,
+                    },
+                    config: {
+                      currentMode:
+                        await storage.getItem<string>("sync:current-mode"),
+                      targetLang:
+                        await storage.getItem<string>("sync:target-lang"),
+                      sourceLang:
+                        await storage.getItem<string>("sync:source-lang"),
+                      geminiKey:
+                        await storage.getItem<string>("sync:gemini-key"),
+                      geminiModel:
+                        await storage.getItem<string>("sync:gemini-model"),
+                      ocrMinConfidence: await storage.getItem<number>(
+                        "sync:ocr-min-confidence",
+                      ),
+                      llmModel: await storage.getItem<string>("sync:llm-model"),
+                      llmTemperature: await storage.getItem<number>(
+                        "sync:llm-temperature",
+                      ),
+                    },
+                  });
+
+                  if (resp?.error) return resp;
+
+                  const { translations, context } = resp;
+
+                  await storage.setItem<PageCache>(
+                    `local:${await translationKey()}`,
+                    {
+                      bboxes,
+                      translations,
+                    },
+                  );
+                  await updateSeriesContext(
+                    seriesContext,
                     seriesName,
                     chapterId,
                     pageIndex,
-                    bboxes,
-                    originalSrc,
+                    translations,
+                    context,
                   );
 
-                let seriesContext = await storage.getItem<SeriesContext>(
-                  `sync:context-${seriesName}`,
-                );
-
-                // Perform the continuity check
-                if (seriesContext) {
-                  const isContinuous =
-                    seriesContext.lastChapterId === chapterId &&
-                    seriesContext.lastPageIndex !== null &&
-                    pageIndex === seriesContext.lastPageIndex + 1;
-
-                  // If they jumped chapters or skipped pages, wipe the history in memory
-                  if (!isContinuous) {
-                    seriesContext.recentHistory = [];
-                  }
-                }
-
-                const resp = await browser.runtime.sendMessage({
-                  type: "TRANSLATE_IMAGE",
-                  data: {
-                    src: originalSrc,
-                    bboxes,
-                    seriesContext,
-                  },
-                  config: {
-                    currentMode:
-                      await storage.getItem<string>("sync:current-mode"),
-                    targetLang:
-                      await storage.getItem<string>("sync:target-lang"),
-                    sourceLang:
-                      await storage.getItem<string>("sync:source-lang"),
-                    geminiKey: await storage.getItem<string>("sync:gemini-key"),
-                    geminiModel:
-                      await storage.getItem<string>("sync:gemini-model"),
-                    ocrMinConfidence: await storage.getItem<number>(
-                      "sync:ocr-min-confidence",
-                    ),
-                    llmModel: await storage.getItem<string>("sync:llm-model"),
-                    llmTemperature: await storage.getItem<number>(
-                      "sync:llm-temperature",
-                    ),
-                  },
-                });
-
-                if (resp?.error) return resp;
-
-                const { translations, context } = resp;
-
-                await storage.setItem<PageCache>(
-                  `local:${await translationKey()}`,
-                  {
+                  const translatedSrc = await repaintWithTranslations(
+                    originalSrc,
                     bboxes,
                     translations,
-                  },
-                );
-                await updateSeriesContext(
-                  seriesContext,
-                  seriesName,
-                  chapterId,
-                  pageIndex,
-                  translations,
-                  context,
-                );
+                  );
+                  translatedSrcMap.set(srcKey(translatedSrc), originalSrc);
 
-                const translatedSrc = await repaintWithTranslations(
-                  originalSrc,
-                  bboxes,
-                  translations,
-                );
-                translatedSrcMap.set(srcKey(translatedSrc), originalSrc);
+                  return translatedSrc;
+                },
 
-                return translatedSrc;
+                onClose: () => overlays.get(originalSrc)?.ui?.remove(),
               },
+            }),
 
-              onClose: () => overlays.get(originalSrc)?.ui?.remove(),
-            },
+          onRemove: (app) => {
+            if (app) unmount(app);
+
+            overlays.delete(originalSrc);
+            for (const [key, value] of translatedSrcMap) {
+              if (value === originalSrc) translatedSrcMap.delete(key);
+            }
+
+            styleObserver.disconnect();
+            domObserver.disconnect();
+
+            const currentImg = wrapper.querySelector("img");
+            if (currentImg) wrapper.replaceWith(currentImg);
+            else wrapper.remove();
+          },
+        }).then((ui) => {
+          overlays.set(originalSrc, { ui, wrapper });
+          ui.mount();
+
+          styleObserver.observe(imgElement, {
+            attributes: true,
+            attributeFilter: ["style"],
+          });
+          domObserver.observe(wrapper.parentElement ?? document.body, {
+            childList: true,
+            subtree: true,
+          });
+        });
+
+        return true;
+      }
+
+      // Test Regex from popup settings to show live result
+      if (msg.type === "TEST_REGEX_RULE") {
+        getSiteRule([msg.data.rule]).then((result) =>
+          sendResponse({
+            context: result,
+            raw: { title: document.title, path: window.location.pathname },
           }),
+        );
 
-        onRemove: (app) => {
-          if (app) unmount(app);
-
-          overlays.delete(originalSrc);
-          for (const [key, value] of translatedSrcMap) {
-            if (value === originalSrc) translatedSrcMap.delete(key);
-          }
-
-          styleObserver.disconnect();
-          domObserver.disconnect();
-
-          const currentImg = wrapper.querySelector("img");
-          if (currentImg) wrapper.replaceWith(currentImg);
-          else wrapper.remove();
-        },
-      }).then((ui) => {
-        overlays.set(originalSrc, { ui, wrapper });
-        ui.mount();
-
-        styleObserver.observe(imgElement, {
-          attributes: true,
-          attributeFilter: ["style"],
-        });
-        domObserver.observe(wrapper.parentElement ?? document.body, {
-          childList: true,
-          subtree: true,
-        });
-      });
+        return true;
+      }
     });
   },
 });

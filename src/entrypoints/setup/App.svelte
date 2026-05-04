@@ -265,10 +265,6 @@
       ? 0
       : ((wizardStepIndex + 1) / WIZARD_STEPS.length) * 100,
   );
-  let hasApiKey = $derived(geminiKey.trim().length > 0);
-  let canProceedMode = $derived(
-    selectedMode === "local" || (selectedMode === "cloud" && hasApiKey),
-  );
 </script>
 
 <main

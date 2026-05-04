@@ -1,3 +1,4 @@
+import { MAKE_SITE_RULE_PROMPT } from "../adapters";
 import { DefaultConfig } from "../configs";
 import { drawNumberedBboxes } from "./utils";
 
@@ -49,6 +50,48 @@ ${
     : ""
 }`;
 
+  return sendRequestToGemini(
+    systemPrompt,
+    userPrompt,
+    apiKey,
+    model,
+    temperature,
+    {
+      mimeType: "image/jpeg",
+      data: cleanBase64,
+    },
+  );
+}
+
+export async function makeSiteRuleWithGemini(
+  title: string,
+  path: string,
+  apiKey: string,
+  model = DefaultConfig.geminiModels[0].id,
+  temperature = DefaultConfig.llmTemperature,
+) {
+  const prompt = MAKE_SITE_RULE_PROMPT(title, path);
+
+  return sendRequestToGemini(
+    prompt.system,
+    prompt.user,
+    apiKey,
+    model,
+    temperature,
+  );
+}
+
+export async function sendRequestToGemini(
+  systemPrompt: string,
+  userPrompt: string,
+  apiKey: string,
+  model: string,
+  temperature: number,
+  data?: {
+    mimeType: string;
+    data: string;
+  },
+): Promise<TranslateResult> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   const response = await fetch(url, {
@@ -65,12 +108,7 @@ ${
           role: "user",
           parts: [
             { text: userPrompt },
-            {
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: cleanBase64,
-              },
-            },
+            ...(data ? [{ inlineData: data }] : []),
           ],
         },
       ],
@@ -88,8 +126,8 @@ ${
     );
   }
 
-  const data = await response.json();
-  const resultText = data.candidates[0].content.parts[0].text;
+  const result = await response.json();
+  const resultText = result.candidates[0].content.parts[0].text;
 
   return JSON.parse(resultText);
 }

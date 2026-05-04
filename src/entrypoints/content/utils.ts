@@ -322,7 +322,10 @@ export async function updateSeriesContext(
   await storage.setItem(`sync:context-${seriesName}`, stored);
 }
 
-export function createImageObservers(originalSrc: string, wrapper: HTMLElement) {
+export function createImageObservers(
+  originalSrc: string,
+  wrapper: HTMLElement,
+) {
   // Syncs wrapper visibility to whatever img is currently inside it
   const styleObserver = new MutationObserver(() => {
     const img = wrapper.querySelector("img");

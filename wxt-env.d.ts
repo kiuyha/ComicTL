@@ -42,3 +42,24 @@ interface TranslateResult {
   translations: Translations;
   context?: { summary: string; dictionary: string };
 }
+
+type ExtractSource = "title" | "path";
+
+interface SiteRule {
+  id: string;
+  domain: string;
+  seriesName: {
+    regex: string;
+    source: ExtractSource;
+  };
+  chapterId: {
+    regex: string;
+    source: ExtractSource;
+  };
+  pageIndex: {
+    regex: string;
+    source: ExtractSource;
+  };
+}
+
+type AIGeneratedRule = Omit<SiteRule, "id" | "domain">;
