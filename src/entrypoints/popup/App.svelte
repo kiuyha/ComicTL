@@ -169,6 +169,7 @@
       title,
       path,
     ));
+    seriesContext.seriesName = seriesName;
 
     const items = await storage.getItems([
       "local:is-first-run",
@@ -218,7 +219,10 @@
     customRules = saved["sync:custom-site-rules"] ?? customRules;
     const storedCtx = saved[`sync:context-${seriesName}`];
     if (storedCtx) {
-      seriesContext = { ...seriesContext, ...storedCtx };
+      seriesContext = {
+        ...seriesContext,
+        ...storedCtx,
+      };
     }
 
     loadingSettings = false;
