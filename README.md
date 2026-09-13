@@ -2,7 +2,7 @@
 
 Translate manga in your browser. Detection runs on your machine, OCR runs on your machine, translation runs on your machine. Nothing leaves your browser unless you want it to.
 
-**Website:** [comictl.kiuyha.my.id](https://comictl.kiuyha.my.id) | **Releases:** [Latest](https://github.com/kiuyha/ComicTL/releases/latest)
+**Website:** [comictl.kiuyha.dev](https://comictl.kiuyha.dev) | **Releases:** [Latest](https://github.com/kiuyha/ComicTL/releases/latest)
 
 <img width="800" height="500" alt="Demo ComicTL" src="https://github.com/user-attachments/assets/3b5341af-1a14-4652-8c2b-4e7e5fb713e4" />
 

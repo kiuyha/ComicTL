@@ -91,7 +91,7 @@
     privacyLoading = true;
     privacyFetchError = false;
     try {
-      const res = await fetch("https://comictl.kiuyha.my.id/privacy.md");
+      const res = await fetch("https://comictl.kiuyha.dev/privacy.md");
       if (!res.ok) throw new Error("Network error");
       privacyMarkdown = await res.text();
     } catch {
